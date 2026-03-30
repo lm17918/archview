@@ -1,0 +1,3 @@
+# Exclude test files from architecture analysis
+tests
+__pycache__

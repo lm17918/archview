@@ -1,0 +1,23 @@
+[project]
+name = "archview"
+version = "0.1.0"
+description = "Interactive live architecture viewer for Python projects"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0.0"]
+
+[project.scripts]
+archview = "archview.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["archview*"]
+
+[tool.setuptools.package-data]
+archview = ["static/*.html", "static/*.js"]

@@ -1,0 +1,33 @@
+2026-03-30 10:41:56 WARNING  [static_analyzer:31] Unsupported programming language: HTML. Skipping.
+2026-03-30 10:41:56 WARNING  [static_analyzer.typescript_config_scanner:50] No TypeScript configuration files found in /home/smarteye/git/archview
+2026-03-30 10:41:56 INFO     [static_analyzer:57] No TypeScript config files found, using repository root
+2026-03-30 10:41:56 INFO     [static_analyzer:141] Starting LSP client for JavaScript
+2026-03-30 10:41:56 WARNING  [static_analyzer.lsp_client.typescript_client:47] node_modules not found in /home/smarteye/git/archview
+2026-03-30 10:41:56 WARNING  [static_analyzer.lsp_client.typescript_client:52] package.json not found in /home/smarteye/git/archview.
+2026-03-30 10:41:56 INFO     [static_analyzer.lsp_client.client:139] Starting server cli.mjs --stdio --log-level=2...
+2026-03-30 10:41:56 ERROR    [static_analyzer:147] Failed to start LSP client for JavaScript
+Traceback (most recent call last):
+  File "static_analyzer/__init__.py", line 142, in start_clients
+  File "static_analyzer/lsp_client/typescript_client.py", line 37, in start
+  File "static_analyzer/lsp_client/client.py", line 140, in start
+  File "subprocess.py", line 1026, in __init__
+  File "subprocess.py", line 1955, in _execute_child
+FileNotFoundError: [Errno 2] No such file or directory: 'cli.mjs'
+2026-03-30 10:41:56 INFO     [codeboarding_pro.session:397] Session c6fac5bd-2b0e-4730-a2b4-eeb25854067b destroyed
+2026-03-30 10:41:56 ERROR    [codeboarding_pro.ws.jsonrpc:104] Unhandled error in method 'initialize'
+Traceback (most recent call last):
+  File "static_analyzer/__init__.py", line 142, in start_clients
+  File "static_analyzer/lsp_client/typescript_client.py", line 37, in start
+  File "static_analyzer/lsp_client/client.py", line 140, in start
+  File "subprocess.py", line 1026, in __init__
+  File "subprocess.py", line 1955, in _execute_child
+FileNotFoundError: [Errno 2] No such file or directory: 'cli.mjs'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "codeboarding_pro/ws/jsonrpc.py", line 99, in dispatch
+  File "codeboarding_pro/ws/methods.py", line 44, in handle_initialize
+  File "codeboarding_pro/session.py", line 102, in initialize
+  File "static_analyzer/__init__.py", line 155, in start_clients
+RuntimeError: Failed to start LSP client for JavaScript
