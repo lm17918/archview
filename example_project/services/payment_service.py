@@ -1,7 +1,7 @@
 """Payment processing service — BROKEN: missing closing parenthesis."""
 
-from app.models.order import Order
-from app.utils.logger import log
+from models.order import Order
+from utils.logger import log
 
 
 def process_payment(order: Order, amount: float:

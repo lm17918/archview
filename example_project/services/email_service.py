@@ -1,5 +1,5 @@
 """Email notification service."""
-from app.utils.logger import log
+from utils.logger import log
 
 
 def send_confirmation(email, order):

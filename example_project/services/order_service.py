@@ -1,8 +1,8 @@
 """Order processing service."""
-from app.models.order import Order
-from app.models.user import User
-from app.services.email_service import send_confirmation
-from app.utils.logger import log
+from models.order import Order
+from models.user import User
+from services.email_service import send_confirmation
+from utils.logger import log
 
 
 class OrderService:

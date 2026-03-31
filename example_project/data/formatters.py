@@ -1,5 +1,5 @@
 """Data formatters for export."""
-from app.utils.logger import log
+from utils.logger import log
 
 
 def to_csv(records):

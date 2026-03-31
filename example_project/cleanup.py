@@ -1,6 +1,6 @@
 """Database cleanup script — BROKEN: indentation error."""
 
-from app.utils.logger import log
+from utils.logger import log
 
 
 def run_cleanup():

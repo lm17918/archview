@@ -1,6 +1,6 @@
 """Cache layer — BROKEN: invalid syntax in dict comprehension."""
 
-from app.config import settings
+from config import settings
 
 
 def build_cache():

@@ -1,6 +1,6 @@
 """Authentication middleware."""
-from app.config import Settings
-from app.utils.logger import log
+from config import Settings
+from utils.logger import log
 
 
 def require_token(token):

@@ -1,1 +1,0 @@
-"""Mini e-commerce application."""
