@@ -209,6 +209,7 @@
     <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>Intermediate</div>
     <div class="legend-item"><span class="legend-dot" style="background:#fca5a5"></span>Utility</div>
     <div class="legend-item"><span class="legend-dot" style="background:#52525e"></span>Isolated</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Error</div>
     <div class="legend-sep"></div>
     <div class="legend-badge"><span class="ltype">fn</span> function</div>
     <div class="legend-badge"><span class="ltype">cls</span> class</div>
@@ -339,7 +340,7 @@ const cy = cytoscape({
     {
       selector: ':parent',
       style: {
-        'label': 'data(label)',
+        'label': ele => '▼ ' + ele.data('label').replace(/^[▶▼] /, ''),
         'text-valign': 'top',
         'text-halign': 'center',
         'font-size': '13px',
@@ -370,6 +371,7 @@ const cy = cytoscape({
     {
       selector: '.collapsed',
       style: {
+        'label': ele => '▶ ' + ele.data('label').replace(/^[▶▼] /, ''),
         'width': '140px',
         'height': '40px',
         'min-width': '140px',
@@ -488,10 +490,9 @@ function isCollapsible(node) {
 }
 
 function updateFolderLabels() {
-  cy.nodes().filter(n => isCollapsible(n)).forEach(n => {
-    const raw = n.data('label').replace(/^[▶▼] /, '').replace(/\/$/, '');
-    n.data('label', (expandedFolders.has(n.id()) ? '▼ ' : '▶ ') + raw);
-  });
+  // Triangles are now handled by CSS style functions (:parent and .collapsed)
+  // Force a style recalculation so labels update immediately
+  cy.nodes().filter(n => isCollapsible(n)).forEach(n => n.style());
 }
 
 function getDescendants(folderId) {

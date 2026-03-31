@@ -16,6 +16,7 @@ NODE_COLORS = {
     "intermediate": ("#93c5fd", "#0a1a2e"),
     "leaf":         ("#fca5a5", "#2e0a0a"),
     "isolated":     ("#3a3a46", "#e2e2e8"),
+    "error":        ("#dc2626", "#ffffff"),
 }
 
 
@@ -101,16 +102,21 @@ def _build_module_index(project_dir: Path, py_files: list[str]):
 
 
 def _parse_modules(modules: dict[str, Path]):
-    """Parse each module via AST. Returns docstrings, symbols, and parsed trees."""
+    """Parse each module via AST. Returns docstrings, symbols, parsed trees, and errors."""
     docstrings: dict[str, str] = {}
     module_symbols: dict[str, dict[str, str]] = {}
     parsed: dict[str, ast.Module] = {}
+    parse_errors: dict[str, str] = {}
 
     for mod, path in modules.items():
         try:
             tree = ast.parse(path.read_text())
             parsed[mod] = tree
-        except Exception:
+        except SyntaxError as e:
+            parse_errors[mod] = f"SyntaxError: {e.msg} (line {e.lineno})"
+            continue
+        except Exception as e:
+            parse_errors[mod] = str(e)
             continue
 
         ds = ast.get_docstring(tree)
@@ -135,7 +141,7 @@ def _parse_modules(modules: dict[str, Path]):
                     syms[node.target.id] = SYM_VAR
         module_symbols[mod] = syms
 
-    return docstrings, module_symbols, parsed
+    return docstrings, module_symbols, parsed, parse_errors
 
 
 def _collect_imports(parsed, modules, module_symbols):
@@ -186,8 +192,10 @@ def _find_parent(node_id: str, all_containers: set[str]) -> str:
 
 
 def _build_elements(all_nodes, folder_ids, all_containers, edge_names,
-                    importers, imported, docstrings, module_symbols, module_rel):
+                    importers, imported, docstrings, module_symbols, module_rel,
+                    parse_errors=None):
     """Assemble the Cytoscape elements list (nodes + edges)."""
+    parse_errors = parse_errors or {}
     elements = []
 
     # Folder (synthetic compound) nodes — emitted first so children can reference them
@@ -203,23 +211,33 @@ def _build_elements(all_nodes, folder_ids, all_containers, edge_names,
 
     # Module nodes
     for node in all_nodes:
-        ntype = _classify_node(node, importers, imported)
-        bg, fg = NODE_COLORS[ntype]
+        if node in parse_errors:
+            bg, fg = NODE_COLORS["error"]
+            label = "\u26a0 " + node.split(".")[-1]
+            docstring = parse_errors[node]
+            ntype = "error"
+            symbols = ""
+        else:
+            ntype = _classify_node(node, importers, imported)
+            bg, fg = NODE_COLORS[ntype]
+            label = node.split(".")[-1]
+            docstring = docstrings.get(node, "")
+            symbols = "\n".join(
+                f"{sym} {name}"
+                for name, sym in sorted(module_symbols.get(node, {}).items())
+                if sym in (SYM_FUNC, SYM_CLASS)
+            )
         elements.append({"data": {
             "id": node,
-            "label": node.split(".")[-1],
-            "docstring": docstrings.get(node, ""),
+            "label": label,
+            "docstring": docstring,
             "color": bg,
             "textColor": fg,
             "type": ntype,
             "group": node.split(".")[0] if "." in node else "",
             "filepath": module_rel.get(node, ""),
             "parent": _find_parent(node, all_containers),
-            "symbols": "\n".join(
-                f"{sym} {name}"
-                for name, sym in sorted(module_symbols.get(node, {}).items())
-                if sym in (SYM_FUNC, SYM_CLASS)
-            ),
+            "symbols": symbols,
         }})
 
     # Edges — arrow points FROM dependency TO importer
@@ -241,7 +259,7 @@ def generate_graph(project_dir: Path, ignore_file: Path | None, output_path: Pat
     project_dir = Path(project_dir)
     py_files = collect_py_files(project_dir, ignore_file)
     modules, module_rel = _build_module_index(project_dir, py_files)
-    docstrings, module_symbols, parsed = _parse_modules(modules)
+    docstrings, module_symbols, parsed, parse_errors = _parse_modules(modules)
     edge_names = _collect_imports(parsed, modules, module_symbols)
 
     all_nodes = sorted(modules.keys())
@@ -263,5 +281,6 @@ def generate_graph(project_dir: Path, ignore_file: Path | None, output_path: Pat
     elements = _build_elements(
         all_nodes, folder_ids, all_containers, edge_names,
         importers, imported, docstrings, module_symbols, module_rel,
+        parse_errors,
     )
     output_path.write_text(json.dumps(elements))

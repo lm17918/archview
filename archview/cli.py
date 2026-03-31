@@ -7,6 +7,37 @@ from pathlib import Path
 from archview.graph import generate_graph
 from archview.server import make_server
 
+# Known stdlib module names that are commonly shadowed by project folders
+_STDLIB_NAMES = {
+    "abc", "ast", "asyncio", "base64", "calendar", "collections", "copy",
+    "csv", "ctypes", "datetime", "decimal", "difflib", "email", "enum",
+    "fractions", "functools", "glob", "gzip", "hashlib", "html", "http",
+    "importlib", "inspect", "io", "itertools", "json", "logging", "math",
+    "multiprocessing", "numbers", "operator", "os", "pathlib", "pickle",
+    "platform", "pprint", "profile", "queue", "random", "re", "secrets",
+    "select", "shelve", "shutil", "signal", "socket", "sqlite3",
+    "statistics", "string", "struct", "subprocess", "sys", "tempfile",
+    "test", "textwrap", "threading", "time", "timeit", "token", "tokenize",
+    "trace", "traceback", "types", "typing", "unittest", "urllib", "uuid",
+    "warnings", "weakref", "xml", "xmlrpc", "zipfile", "zipimport",
+}
+
+
+def _check_stdlib_shadowing(project_dir: Path):
+    """Warn if any folder in the project shadows a Python stdlib module."""
+    shadowed = []
+    for item in project_dir.iterdir():
+        if item.is_dir() and item.name in _STDLIB_NAMES:
+            init = item / "__init__.py"
+            if init.exists() or any(item.glob("*.py")):
+                shadowed.append(item.name)
+    if shadowed:
+        print(f"\n  WARNING: These project folders shadow Python stdlib modules:")
+        for name in sorted(shadowed):
+            print(f"    - {name}/")
+        print(f"  This may cause crashes in archview or pip.")
+        print(f"  Consider renaming them.\n")
+
 IGNORE_FILENAME = ".analyzeignore"
 
 
@@ -85,6 +116,7 @@ def _cmd_serve(args):
     static_dir = Path(str(importlib.resources.files("archview"))) / "static"
     graph_path = data_dir / "graph.json"
 
+    _check_stdlib_shadowing(project_dir)
     print("Running initial analysis...")
     generate_graph(project_dir, ignore_file, graph_path)
     print(f"Graph generated. Open http://localhost:{args.port}")
