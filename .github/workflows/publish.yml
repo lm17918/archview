@@ -20,7 +20,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install build deps
-        run: pip install build cython
+        run: pip install build cython auditwheel patchelf
 
       - name: Copy engine source
         env:
@@ -29,6 +29,12 @@ jobs:
 
       - name: Build wheel
         run: python -m build --wheel
+
+      - name: Fix wheel platform tag
+        run: |
+          auditwheel repair dist/*.whl --plat manylinux_2_35_x86_64 -w dist-fixed/
+          rm -rf dist
+          mv dist-fixed dist
 
       - uses: actions/upload-artifact@v4
         with:
