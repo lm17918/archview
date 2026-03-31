@@ -132,7 +132,7 @@ def _cmd_serve(args):
 
     threading.Thread(target=watcher, daemon=True).start()
 
-    server = make_server("0.0.0.0", args.port, static_dir, data_dir, project_dir)
+    server = make_server("0.0.0.0", args.port, static_dir, data_dir, project_dir, args.interval)
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
@@ -170,8 +170,10 @@ def main():
     # --- serve (default) ---
     serve_parser = subparsers.add_parser("serve", help="Start the live architecture viewer")
     serve_parser.add_argument("project_dir", nargs="?", default=".")
-    serve_parser.add_argument("--port", "-p", type=int, default=9090)
+    serve_parser.add_argument("--port", "-p", type=int, default=9090,
+                              choices=range(1, 65536), metavar="PORT")
     serve_parser.add_argument("--interval", type=int, default=10,
+                              choices=range(1, 3601), metavar="SEC",
                               help="Graph refresh interval in seconds (default: 10)")
 
     args = parser.parse_args()

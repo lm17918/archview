@@ -9,6 +9,7 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
     static_dir: Path
     data_dir: Path
     project_dir: Path
+    interval: int = 10
 
     MIME = {
         ".js":   "application/javascript",
@@ -19,7 +20,12 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path in ("/", "/live.html"):
+        if path == "/" and "interval" not in self.path:
+            self.send_response(302)
+            self.send_header("Location", f"/live.html?interval={self.interval}")
+            self.end_headers()
+            return
+        elif path in ("/", "/live.html"):
             self._serve_file(self.static_dir / "live.html", "text/html; charset=utf-8")
         elif path == "/graph.json":
             self._serve_file(self.data_dir / "graph.json", "application/json")
@@ -59,9 +65,17 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
         body = self._read_json_body()
         filepath = body.get("file", "")
         if filepath:
-            abs_path = self.project_dir / filepath
+            abs_path = (self.project_dir / filepath).resolve()
+            try:
+                abs_path.relative_to(self.project_dir.resolve())
+            except ValueError:
+                self._json_response({"ok": False, "error": "path outside project"}, 403)
+                return
             if abs_path.exists():
-                subprocess.Popen(["code", "--goto", str(abs_path)])
+                try:
+                    subprocess.Popen(["code", "--goto", str(abs_path)])
+                except FileNotFoundError:
+                    pass
         self._json_response({"ok": True})
 
     def _handle_save(self):
@@ -90,9 +104,10 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def make_server(host: str, port: int, static_dir: Path, data_dir: Path, project_dir: Path):
+def make_server(host: str, port: int, static_dir: Path, data_dir: Path, project_dir: Path, interval: int = 10):
     ArchviewHandler.static_dir = Path(static_dir)
     ArchviewHandler.data_dir = Path(data_dir)
     ArchviewHandler.project_dir = Path(project_dir)
+    ArchviewHandler.interval = interval
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     return http.server.ThreadingHTTPServer((host, port), ArchviewHandler)

@@ -208,7 +208,7 @@
     <div class="legend-item"><span class="legend-dot" style="background:#6ee7b7"></span>Top-level</div>
     <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>Intermediate</div>
     <div class="legend-item"><span class="legend-dot" style="background:#fca5a5"></span>Utility</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#52525e"></span>Isolated</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3a3a46"></span>Isolated</div>
     <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Error</div>
     <div class="legend-sep"></div>
     <div class="legend-badge"><span class="ltype">fn</span> function</div>
@@ -235,7 +235,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-const REFRESH_MS = 10000;
+const REFRESH_MS = parseInt(new URLSearchParams(window.location.search).get('interval') || '10') * 1000;
 const statusEl = document.getElementById('status');
 const tooltip = document.getElementById('tooltip');
 
@@ -663,10 +663,15 @@ cy.on('dblclick', 'node', evt => {
 let firstLoad = true;
 
 function runLayout(fit, newNodeIds = new Set()) {
+  // If many new nodes arrived, do a full re-layout so dagre can place everything properly
+  const fullRelayout = newNodeIds.size > 2 || firstLoad;
+
   const frozenPositions = {};
-  cy.nodes().forEach(n => {
-    if (!newNodeIds.has(n.id())) frozenPositions[n.id()] = { ...n.position() };
-  });
+  if (!fullRelayout) {
+    cy.nodes().forEach(n => {
+      if (!newNodeIds.has(n.id())) frozenPositions[n.id()] = { ...n.position() };
+    });
+  }
 
   cy.layout({
     name: 'dagre',
@@ -758,8 +763,22 @@ function highlightNewNodes(addedNodes) {
 async function refresh() {
   try {
     const resp = await fetch('/graph.json?t=' + Date.now());
+    if (resp.status === 404) {
+      // graph.json not generated yet — keep waiting
+      setStatus('Waiting for analysis…', false);
+      return;
+    }
     if (!resp.ok) { setStatus('Error ' + resp.status, false); return; }
     const newElements = await resp.json();
+
+    if (newElements.length === 0) {
+      // No modules found — clear graph, don't crash
+      cy.elements().remove();
+      setStatus('No modules found · ' + new Date().toLocaleTimeString());
+      firstLoad = false;
+      return;
+    }
+
     const index = indexElements(newElements);
     const addedNodes = reconcileGraph(index);
     trackCompoundNodes(newElements);
@@ -779,7 +798,8 @@ async function refresh() {
     const n = cy.nodes().length;
     setStatus(`${n} module${n !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`);
   } catch(e) {
-    setStatus('Fetch error', false);
+    console.error('refresh error:', e);
+    setStatus('Fetch error: ' + e.message, false);
   }
 }
 
