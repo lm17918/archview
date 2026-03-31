@@ -219,6 +219,7 @@
     <span id="status">Loading…</span>
     <button id="btn-fit">Fit</button>
     <button id="btn-layout">Reset layout</button>
+    <button id="btn-png">PNG</button>
     <button id="btn-save" class="primary">Save</button>
   </div>
 </div>
@@ -806,6 +807,17 @@ document.getElementById('btn-layout').addEventListener('click', () => {
 });
 
 document.getElementById('btn-fit').addEventListener('click', () => cy.fit(48));
+
+document.getElementById('btn-png').addEventListener('click', () => {
+  const png = cy.png({ output: 'blob', bg: '#0a0a0d', scale: 2, full: true });
+  const url = URL.createObjectURL(png);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'architecture.png';
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('PNG saved');
+});
 
 refresh();
 setInterval(refresh, REFRESH_MS);
