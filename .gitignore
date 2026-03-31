@@ -6,3 +6,9 @@ __pycache__/
 dist/
 build/
 .eggs/
+.codeboarding/
+
+# Closed-source engine (compiled .so/.pyd distributed separately)
+archview/_engine.py
+archview/_engine*.so
+archview/_engine*.pyd
