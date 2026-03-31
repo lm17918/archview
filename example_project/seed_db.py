@@ -1,7 +1,7 @@
 """Seed the database with sample data."""
-from app.services.user_service import UserService
-from app.services.order_service import OrderService
-from app.config import Settings
+from services.user_service import UserService
+from services.order_service import OrderService
+from config import Settings
 
 
 def seed():

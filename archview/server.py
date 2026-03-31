@@ -94,4 +94,5 @@ def make_server(host: str, port: int, static_dir: Path, data_dir: Path, project_
     ArchviewHandler.static_dir = Path(static_dir)
     ArchviewHandler.data_dir = Path(data_dir)
     ArchviewHandler.project_dir = Path(project_dir)
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
     return http.server.ThreadingHTTPServer((host, port), ArchviewHandler)

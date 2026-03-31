@@ -1,9 +1,9 @@
 """Application entry point — wires together routes, services, and config."""
-from app.config import Settings
-from app.api.routes import register_routes
-from app.api.auth import require_token
-from app.services.user_service import UserService
-from app.services.order_service import OrderService
+from config import Settings
+from api.routes import register_routes
+from api.auth import require_token
+from services.user_service import UserService
+from services.order_service import OrderService
 
 
 def create_app():

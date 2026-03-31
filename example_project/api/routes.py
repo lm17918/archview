@@ -1,7 +1,7 @@
 """Route definitions for the REST API."""
-from app.api.auth import require_token
-from app.utils.logger import log
-from app.utils.validators import validate_email
+from api.auth import require_token
+from utils.logger import log
+from utils.validators import validate_email
 
 
 def register_routes(user_svc, order_svc):

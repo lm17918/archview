@@ -1,8 +1,8 @@
 """User management service."""
-from app.models.user import User
-from app.api.auth import hash_password
-from app.utils.logger import log
-from app.utils.validators import validate_email
+from models.user import User
+from api.auth import hash_password
+from utils.logger import log
+from utils.validators import validate_email
 
 
 class UserService:

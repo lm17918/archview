@@ -1,81 +1,78 @@
 # ArchView
 
-Interactive live architecture viewer for Python projects. Analyzes import dependencies via AST and renders an interactive graph in the browser.
+**See your codebase. Understand it. Then change it.**
 
-## Features
+ArchView gives you a live, interactive map of any Python project's architecture — right in your browser. It parses real Python (via AST, not regex), watches for changes, and updates the graph in real time.
 
-- **AST-based analysis** — no regex, parses real Python syntax
-- **Live refresh** — watches for file changes and updates the graph automatically
-- **Interactive UI** — click, hover, drag, collapse folders, highlight dependencies
-- **IDE integration** — double-click a node to open the file in VS Code
-- **Zero dependencies** — pure Python, ships with Cytoscape.js & Dagre.js
-- **Git-aware** — only analyzes tracked files (falls back to os.walk)
-- **Draw.io export** — save positions and export as `.drawio`
+Built for developers who vibe-code and need to stay oriented, or anyone inheriting a codebase they didn't write.
+
+<!-- TODO: replace with actual GIF -->
+![ArchView demo](docs/demo.gif)
+
+## Why
+
+You're 200 files deep in someone else's project. Or you're building fast and your own code is getting tangled. You need to *see* the structure — what depends on what, where the entry points are, which modules are isolated.
+
+ArchView shows you all of that in seconds, and keeps updating as you code.
 
 ## Install
 
 ```bash
-pip install -e .
+pip install archview
 ```
 
-## Quick Start
+## Usage
 
 ```bash
-# Analyze the example project
-archview example_project
-
-# Or analyze any Python project
 archview /path/to/your/project
+```
 
+Open http://localhost:9090 — that's it.
+
+```bash
 # Custom port and refresh interval
 archview /path/to/project --port 8080 --interval 5
 ```
 
-Then open http://localhost:9090 in your browser.
+## What you see
 
-## Example Project
+| Color | Meaning |
+|-------|---------|
+| **Green** | Entry points — modules that import but aren't imported |
+| **Blue** | Connectors — modules that both import and are imported |
+| **Red** | Utilities — leaf modules only imported by others |
+| **Gray** | Isolated — no import relationships |
+| **Red (bright)** | Syntax errors — files that failed to parse |
 
-The `example_project/` directory contains a mini e-commerce app to demonstrate archview's capabilities:
+<!-- TODO: replace with actual GIF -->
+![Node colors and types](docs/colors.gif)
 
-```
-example_project/
-  app/
-    main.py           # Entry point — wires everything together
-    config.py         # Global settings
-    api/
-      routes.py       # REST API route definitions
-      auth.py         # Authentication middleware
-    services/
-      user_service.py   # User management
-      order_service.py  # Order processing
-      email_service.py  # Email notifications
-    models/
-      user.py         # User data model
-      order.py        # Order data model
-    data/
-      formatters.py   # CSV/JSON export formatters
-    utils/
-      logger.py       # Logging utility
-      validators.py   # Input validation
-  scripts/
-    seed_db.py        # Database seeding script
-    migrate.py        # Migration runner
-    export_report.py  # Report export script
-```
+## Features
 
-Try it:
+### Live refresh
+Edit your code, save — the graph updates automatically. No restart needed.
 
-```bash
-archview example_project
-```
+<!-- TODO: replace with actual GIF -->
+![Live refresh](docs/live-refresh.gif)
 
-You'll see all node types in the graph:
-- **Green (Top-level)** — entry points like `main.py` and scripts
-- **Blue (Intermediate)** — modules that both import and are imported (e.g. `routes`, `user_service`)
-- **Red (Utility)** — leaf modules only imported by others (e.g. `logger`, `validators`)
-- Folders collapse/expand on click
+### Interactive exploration
+- **Hover** a node to see its docstring, type, and exported symbols
+- **Click** a node to highlight its direct dependencies
+- **Double-click** to open the file in VS Code
+- **Drag** nodes to rearrange the layout
+- **Click folders** to collapse/expand entire packages
 
-## Manage Ignore Patterns
+<!-- TODO: replace with actual GIF -->
+![Interactive exploration](docs/interaction.gif)
+
+### Dependency highlighting
+Hover over an edge to see exactly which symbols are imported. Click a node and its entire dependency chain lights up — everything else fades.
+
+### Export
+- **PNG** — screenshot the current view
+- **Save** — persist node positions (restored on next launch)
+
+### Ignore patterns
 
 ```bash
 # Exclude directories from analysis
@@ -88,9 +85,27 @@ archview ignore --list
 archview ignore --remove tests
 ```
 
-## Tests
+## How it works
+
+1. Collects all `.py` files (git-aware, respects `.analyzeignore`)
+2. Parses each file's AST to extract imports, functions, classes
+3. Builds a dependency graph with classified nodes
+4. Renders it with [Cytoscape.js](https://js.cytoscape.org/) + [Dagre](https://github.com/dagrejs/dagre) layout
+5. Watches for changes and re-generates every N seconds
+
+**Zero dependencies** — pure Python stdlib. The frontend ships bundled.
+
+## Example
+
+The repo includes an `example_project/` (a mini e-commerce app) to try it out:
 
 ```bash
-pip install -e ".[test]"
-pytest tests/
+git clone https://github.com/lm17918/archview.git
+cd archview
+pip install -e .
+archview example_project
 ```
+
+## License
+
+MIT
