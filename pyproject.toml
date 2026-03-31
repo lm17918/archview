@@ -12,7 +12,7 @@ test = ["pytest>=7.0.0"]
 archview = "archview.cli:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -20,4 +20,7 @@ where = ["."]
 include = ["archview*"]
 
 [tool.setuptools.package-data]
-archview = ["static/*.html", "static/*.js"]
+archview = ["static/*.html", "static/*.js", "_engine*.so", "_engine*.pyd"]
+
+[tool.setuptools.exclude-package-data]
+archview = ["_engine.py"]

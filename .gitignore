@@ -8,7 +8,8 @@ build/
 .eggs/
 .codeboarding/
 
-# Closed-source engine (compiled .so/.pyd distributed separately)
+# Closed-source engine (source + build artifacts)
 archview/_engine.py
 archview/_engine*.so
 archview/_engine*.pyd
+archview/_engine.c
