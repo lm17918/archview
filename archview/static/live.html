@@ -610,10 +610,16 @@ function renderNodeTooltip(node) {
   tooltip.style.display = 'block';
 }
 
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
 function renderSymbolLines(text) {
   return text.split('\n').map(l => {
     const [type, ...rest] = l.split(' ');
-    return `<span style="color:#8b7cf8;font-weight:700">${type}</span> <span style="color:#fff;font-weight:500">${rest.join(' ')}</span>`;
+    return `<span style="color:#8b7cf8;font-weight:700">${escapeHtml(type)}</span> <span style="color:#fff;font-weight:500">${escapeHtml(rest.join(' '))}</span>`;
   }).join('<br>');
 }
 

@@ -33,7 +33,13 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
             self._serve_file(self.data_dir / "positions.json", "application/json")
         else:
             # serve any file from static_dir (JS, CSS, etc.)
-            candidate = self.static_dir / path.lstrip("/")
+            candidate = (self.static_dir / path.lstrip("/")).resolve()
+            try:
+                candidate.relative_to(self.static_dir.resolve())
+            except ValueError:
+                self.send_response(403)
+                self.end_headers()
+                return
             if candidate.exists() and candidate.is_file():
                 ext = candidate.suffix.lower()
                 mime = self.MIME.get(ext, "application/octet-stream")
@@ -51,8 +57,13 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    MAX_BODY_SIZE = 2 * 1024 * 1024  # 2 MB
+
     def _read_json_body(self):
         length = int(self.headers.get("Content-Length", 0))
+        if length > self.MAX_BODY_SIZE:
+            self._json_response({"ok": False, "error": "payload too large"}, 413)
+            return None
         return json.loads(self.rfile.read(length))
 
     def _json_response(self, data, status=200):
@@ -63,14 +74,23 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_open(self):
         body = self._read_json_body()
+        if body is None:
+            return
         filepath = body.get("file", "")
         if filepath:
-            abs_path = (self.project_dir / filepath).resolve()
             try:
-                abs_path.relative_to(self.project_dir.resolve())
-            except ValueError:
+                abs_path = (self.project_dir / filepath).resolve(strict=True)
+                abs_path.relative_to(self.project_dir.resolve(strict=True))
+            except (ValueError, OSError):
                 self._json_response({"ok": False, "error": "path outside project"}, 403)
                 return
+            if abs_path.is_symlink():
+                try:
+                    real = abs_path.resolve(strict=True)
+                    real.relative_to(self.project_dir.resolve(strict=True))
+                except (ValueError, OSError):
+                    self._json_response({"ok": False, "error": "symlink target outside project"}, 403)
+                    return
             if abs_path.exists():
                 try:
                     subprocess.Popen(["code", "--goto", str(abs_path)])
@@ -80,6 +100,8 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_save(self):
         positions = self._read_json_body()
+        if positions is None:
+            return
         (self.data_dir / "positions.json").write_text(json.dumps(positions, indent=2))
         self._json_response({"ok": True})
         print("  Saved positions")
