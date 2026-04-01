@@ -21,6 +21,8 @@ ArchView shows you all of that in seconds, and keeps updating as you code.
 pip install archview
 ```
 
+Available on [PyPI](https://pypi.org/project/archview/). Works on Linux with Python 3.10+.
+
 ## Usage
 
 ```bash
