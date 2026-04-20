@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>archview</title>
+<script defer src="/cytoscape.min.js"></script>
+<script defer src="/dagre.min.js"></script>
+<script defer src="/cytoscape-dagre.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0d;
+    --surface: #111116;
+    --surface2: #1a1a22;
+    --surface3: #22222c;
+    --border: #28283a;
+    --text: #eeeef5;
+    --text-muted: #7070a0;
+    --accent: #8b7cf8;
+    --accent-dim: rgba(139,124,248,0.18);
+    --green: #4ade80;
+    --red: #f87171;
+    --header-h: 56px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    color: var(--text);
+  }
+
+  /* ── Header ── */
+  #header {
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    flex-shrink: 0;
+    backdrop-filter: blur(12px);
+  }
+
+  #brand {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  #brand span { color: var(--accent); }
+
+  /* ── Legend (center) ── */
+  #legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #c8c8e0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    white-space: nowrap;
+    letter-spacing: 0.1px;
+  }
+
+  .legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #c8c8e0;
+    background: var(--surface3);
+    border: 1px solid #38384a;
+    border-radius: 20px;
+    padding: 4px 12px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+  .legend-badge .ltype { color: var(--accent); }
+
+  .legend-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 6px;
+    flex-shrink: 0;
+  }
+
+  /* ── Controls (right) ── */
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  #status {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-right: 4px;
+    white-space: nowrap;
+  }
+
+  button {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  button:hover {
+    background: var(--surface3);
+    border-color: #3a3a55;
+  }
+  button.primary {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #cdc5ff;
+  }
+  button.primary:hover {
+    background: rgba(139,124,248,0.28);
+  }
+
+  /* ── Graph area ── */
+  #graph-wrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+  #cy {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+  }
+
+  /* ── Tooltip ── */
+  #tooltip {
+    display: none;
+    position: fixed;
+    background: #18181f;
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 15px;
+    max-width: 380px;
+    border: 1px solid #35354a;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+    line-height: 1.6;
+  }
+  .tt-name {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 5px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #cdc5ff;
+  }
+  .tt-doc { color: #a0a0c0; font-style: italic; font-size: 14px; }
+  .tt-type {
+    margin-top: 7px;
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .tt-symbols {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2e2e42;
+    font-size: 14px;
+    line-height: 1.8;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Annotation toolbar ── */
+  #anno-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 50;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 5px;
+  }
+  .tool-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Annotation layer ── */
+  #anno-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+  }
+  #anno-layer.tool-active { pointer-events: all; cursor: crosshair; }
+  #anno-layer.tool-text   { cursor: text; }
+  #anno-viewport {
+    transform-origin: 0 0;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  .annotation { position: absolute; pointer-events: none; }
+  .anno-box {
+    border: 2px dashed;
+    border-radius: 8px;
+    background: rgba(139,124,248,0.05);
+  }
+  .anno-box-label {
+    position: absolute;
+    top: -11px;
+    left: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    padding: 0 6px;
+    background: var(--bg);
+    white-space: nowrap;
+  }
+  .anno-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    font-weight: 600;
+    white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+  }
+  .anno-preview { opacity: 0.5; }
+  #anno-viewport.eraser-active .annotation {
+    pointer-events: all;
+    cursor: pointer;
+  }
+  #anno-viewport.eraser-active .annotation:hover { opacity: 0.4; }
+
+  /* ── Diff mode ── */
+  #diff-controls {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  #diff-ref {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: pointer;
+    max-width: 180px;
+  }
+  #diff-ref:focus { border-color: var(--accent); outline: none; }
+  .diff-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+  .diff-badge-add { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .diff-badge-del { background: rgba(248,113,113,0.15); color: #f87171; }
+  .diff-badge-mod { background: rgba(250,204,21,0.15); color: #facc15; }
+
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="brand">arch<span>view</span></div>
+
+  <div id="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#6ee7b7"></span>Top-level</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>Intermediate</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#fca5a5"></span>Utility</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#3a3a46"></span>Isolated</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Error</div>
+    <div class="legend-sep"></div>
+    <div class="legend-badge"><span class="ltype">fn</span> function</div>
+    <div class="legend-badge"><span class="ltype">cls</span> class</div>
+    <div class="legend-badge"><span class="ltype">var</span> variable</div>
+  </div>
+
+  <div id="controls">
+    <div id="diff-controls">
+      <select id="diff-ref"><option value="">Diff…</option></select>
+    </div>
+    <span id="status">Loading…</span>
+    <button id="btn-fit">Fit</button>
+    <button id="btn-layout">Reset layout</button>
+    <button id="btn-png">PNG</button>
+    <button id="btn-save" class="primary">Save</button>
+  </div>
+</div>
+
+<div id="graph-wrap">
+  <div id="cy"></div>
+  <div id="anno-layer"><div id="anno-viewport"></div></div>
+  <div id="anno-toolbar">
+    <button class="tool-btn active" data-tool="" title="Select (Esc)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51z"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="box" title="Draw box">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="text" title="Add text">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg>
+    </button>
+    <button class="tool-btn" data-tool="eraser" title="Erase annotation">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7l-4-4 10-10 8 8-4 4z"/><line x1="18" y1="13" x2="11" y2="6"/></svg>
+    </button>
+  </div>
+</div>
+<div id="tooltip">
+  <div class="tt-name"></div>
+  <div class="tt-doc"></div>
+  <div class="tt-type"></div>
+  <div class="tt-symbols"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+const REFRESH_MS = parseInt(new URLSearchParams(window.location.search).get('interval') || '10') * 1000;
+const statusEl = document.getElementById('status');
+const tooltip = document.getElementById('tooltip');
+
+const NODE_COLORS = {
+  entry:        '#6ee7b7',
+  intermediate: '#93c5fd',
+  leaf:         '#fca5a5',
+  isolated:     '#3a3a46',
+};
+
+const userPositions = {};
+
+async function loadSavedPositions() {
+  try {
+    const resp = await fetch('/positions.json?t=' + Date.now());
+    if (resp.ok) Object.assign(userPositions, await resp.json());
+  } catch(e) {}
+}
+loadSavedPositions();
+
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  elements: [],
+  style: [
+    {
+      selector: 'node',
+      style: {
+        'label': 'data(label)',
+        'background-color': 'data(color)',
+        'color': 'data(textColor)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'font-size': '12px',
+        'font-family': "'SF Mono', 'Fira Code', 'Consolas', monospace",
+        'font-weight': '700',
+        'text-wrap': 'wrap',
+        'text-max-width': '160px',
+        'width': 'label',
+        'height': 'label',
+        'padding': '14px',
+        'shape': 'roundrectangle',
+        'border-width': 1,
+        'border-color': 'rgba(255,255,255,0.12)',
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 1.5,
+        'line-color': '#5a5a72',
+        'target-arrow-color': '#6e6e88',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'arrow-scale': 0.85,
+        'label': '',
+      }
+    },
+    {
+      selector: 'edge[?is_proxy]',
+      style: {
+        'width': 1.5,
+        'line-color': '#5a5a72',
+        'target-arrow-color': '#6e6e88',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'line-style': 'dashed',
+        'line-dash-pattern': [6, 4],
+        'arrow-scale': 0.85,
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-color': '#7c6af7',
+        'border-width': 2.5,
+      }
+    },
+    {
+      selector: '.faded',
+      style: { 'opacity': 0.12 }
+    },
+    {
+      selector: '.highlighted',
+      style: { 'opacity': 1 }
+    },
+    {
+      selector: 'edge.highlighted',
+      style: {
+        'line-color': '#7c6af7',
+        'target-arrow-color': '#7c6af7',
+        'width': 2.5,
+      }
+    },
+    {
+      selector: '.new-node',
+      style: {
+        'border-color': '#4ade80',
+        'border-width': 2.5,
+        'border-style': 'dashed',
+      }
+    },
+    {
+      selector: ':parent',
+      style: {
+        'label': ele => '▼ ' + ele.data('label').replace(/^[▶▼] /, ''),
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'font-size': '13px',
+        'font-weight': '700',
+        'color': '#c8c8e0',
+        'background-color': '#1e1e2a',
+        'background-opacity': 1,
+        'border-width': 1.5,
+        'border-color': '#3a3a55',
+        'border-style': 'solid',
+        'padding': '28px',
+        'padding-top': '10px',
+        'shape': 'roundrectangle',
+        'text-margin-y': 8,
+      }
+    },
+    {
+      selector: 'node[?is_folder]',
+      style: {
+        'background-color': '#1e1e2a',
+        'border-color': '#4a4a6a',
+        'border-width': 1.5,
+        'color': '#c8c8e0',
+        'font-size': '13px',
+        'font-weight': '700',
+      }
+    },
+    {
+      selector: '.collapsed',
+      style: {
+        'label': ele => '▶ ' + ele.data('label').replace(/^[▶▼] /, ''),
+        'width': '140px',
+        'height': '40px',
+        'min-width': '140px',
+        'min-height': '40px',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'background-color': '#1e1e2a',
+        'border-width': 1.5,
+        'border-color': '#4a4a6a',
+        'border-style': 'solid',
+        'shape': 'roundrectangle',
+        'font-size': '13px',
+        'font-weight': '700',
+        'color': '#c8c8e0',
+        'padding': '10px',
+      }
+    },
+    {
+      selector: '.diff-added',
+      style: {
+        'border-color': '#4ade80',
+        'border-width': 2.5,
+        'border-style': 'solid',
+      }
+    },
+    {
+      selector: '.diff-removed',
+      style: {
+        'opacity': 0.3,
+        'border-color': '#f87171',
+        'border-width': 2,
+        'border-style': 'dashed',
+      }
+    },
+    {
+      selector: '.diff-modified',
+      style: {
+        'border-color': '#facc15',
+        'border-width': 2.5,
+        'border-style': 'solid',
+      }
+    },
+    {
+      selector: 'edge.diff-added',
+      style: {
+        'line-color': '#4ade80',
+        'target-arrow-color': '#4ade80',
+        'width': 2.5,
+      }
+    },
+    {
+      selector: 'edge.diff-removed',
+      style: {
+        'line-color': '#f87171',
+        'target-arrow-color': '#f87171',
+        'width': 1.5,
+        'line-style': 'dashed',
+        'opacity': 0.3,
+      }
+    },
+  ],
+  layout: { name: 'preset' },
+  wheelSensitivity: 0.3,
+});
+
+cy.on('dragfree', 'node', evt => {
+  userPositions[evt.target.id()] = { ...evt.target.position() };
+});
+
+// ── Folder collapse / expand ──────────────────────────────────────────────
+const expandedFolders = new Set();
+const savedParents = new Map();    // nodeId → original parent id (when detached)
+const savedPositions = new Map();  // nodeId → {x,y} at detach time
+const compoundNodes = new Set();   // ids of nodes that are folders/compounds
+const collapsePositions = new Map(); // folderId → {x,y} at collapse time
+
+function getCollapsedAncestor(nodeId) {
+  const n = cy.getElementById(nodeId);
+  if (n.length && !n.hidden()) return nodeId;
+  let current = savedParents.get(nodeId);
+  while (current) {
+    const node = cy.getElementById(current);
+    if (node.length && !node.hidden()) return current;
+    current = savedParents.get(current);
+  }
+  return nodeId;
+}
+
+function updateProxyEdges() {
+  cy.edges('[?is_proxy]').remove();
+  const proxyLabels = {};
+  cy.edges().not('[?is_proxy]').forEach(edge => {
+    const src = getCollapsedAncestor(edge.data('source'));
+    const tgt = getCollapsedAncestor(edge.data('target'));
+    if (src === tgt) return;
+    if (src === edge.data('source') && tgt === edge.data('target')) return;
+    const key = `${src}→${tgt}`;
+    if (!proxyLabels[key]) proxyLabels[key] = { src, tgt, lines: new Set() };
+    const label = edge.data('label');
+    if (label) label.split('\n').forEach(l => { if (l.trim()) proxyLabels[key].lines.add(l.trim()); });
+  });
+  for (const [key, info] of Object.entries(proxyLabels)) {
+    const label = [...info.lines].sort().join('\n');
+    cy.add({ data: { id: `__proxy__${key}`, source: info.src, target: info.tgt, is_proxy: true, label } });
+  }
+}
+
+function applyCollapse() {
+  // Use savedParents to find original parent even for detached nodes
+  function getOriginalParent(nodeId) {
+    return savedParents.get(nodeId) || cy.getElementById(nodeId).data('parent');
+  }
+
+  function shouldBeVisible(nodeId) {
+    const parentId = getOriginalParent(nodeId);
+    if (!parentId) return true;
+    if (!expandedFolders.has(parentId)) return false;
+    return shouldBeVisible(parentId);
+  }
+
+  // Pre-compute visibility before making any changes
+  const visibility = new Map();
+  cy.nodes().forEach(n => visibility.set(n.id(), shouldBeVisible(n.id())));
+
+  // Apply: reattach visible nodes, detach hidden ones
+  cy.nodes().forEach(n => {
+    const id = n.id();
+    if (visibility.get(id)) {
+      const origParent = savedParents.get(id);
+      if (origParent) {
+        n.move({ parent: origParent });
+        savedParents.delete(id);
+        const pos = userPositions[id] || savedPositions.get(id);
+        if (pos) n.position(pos);
+        savedPositions.delete(id);
+      }
+      n.show();
+    } else {
+      const currentParent = n.data('parent');
+      if (currentParent) {
+        savedPositions.set(id, { ...n.position() });
+        savedParents.set(id, currentParent);
+        n.move({ parent: null });
+      }
+      n.hide();
+    }
+
+    if (compoundNodes.has(id)) {
+      if (!expandedFolders.has(id)) n.addClass('collapsed');
+      else n.removeClass('collapsed');
+    }
+  });
+
+  updateProxyEdges();
+}
+
+function isCollapsible(node) {
+  return node.data('is_folder') || compoundNodes.has(node.id());
+}
+
+function updateFolderLabels() {
+  // Triangles are now handled by CSS style functions (:parent and .collapsed)
+  // Force a style recalculation so labels update immediately
+  cy.nodes().filter(n => isCollapsible(n)).forEach(n => n.style());
+}
+
+function getDescendants(folderId) {
+  const result = [];
+  savedParents.forEach((parent, childId) => {
+    let current = parent;
+    while (current) {
+      if (current === folderId) { result.push(childId); break; }
+      current = savedParents.get(current);
+    }
+  });
+  return result;
+}
+
+function toggleFolder(id) {
+  const node = cy.getElementById(id);
+  if (expandedFolders.has(id)) {
+    // Collapsing — save folder position for later delta
+    if (node.length) collapsePositions.set(id, { ...node.position() });
+    expandedFolders.delete(id);
+  } else {
+    // Expanding — shift children by how much the folder moved
+    const savedPos = collapsePositions.get(id);
+    if (node.length && savedPos) {
+      const cur = node.position();
+      const dx = cur.x - savedPos.x;
+      const dy = cur.y - savedPos.y;
+      if (dx !== 0 || dy !== 0) {
+        for (const childId of getDescendants(id)) {
+          if (userPositions[childId]) {
+            userPositions[childId].x += dx;
+            userPositions[childId].y += dy;
+          }
+        }
+      }
+      collapsePositions.delete(id);
+    }
+    // Compound node position is derived from children — remove standalone position
+    delete userPositions[id];
+    expandedFolders.add(id);
+  }
+  updateFolderLabels();
+  applyCollapse();
+  cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
+  applyFocus();
+}
+
+// ── Node focus ───────────────────────────────────────────────────────────
+const selectedNodes = new Set();
+
+function applyFocus() {
+  if (selectedNodes.size === 0) {
+    cy.elements().removeClass('faded highlighted');
+    if (hoveredNode) renderNodeTooltip(hoveredNode);
+    return;
+  }
+  let neighborhood = cy.collection();
+  selectedNodes.forEach(id => {
+    const n = cy.getElementById(id);
+    if (n.length) neighborhood = neighborhood.union(n.closedNeighborhood());
+  });
+  // also include proxy edges where a selected node is an endpoint
+  cy.edges('[?is_proxy]').forEach(e => {
+    if (selectedNodes.has(e.data('source')) || selectedNodes.has(e.data('target'))) {
+      neighborhood = neighborhood.union(e);
+    }
+  });
+  cy.elements().removeClass('highlighted').addClass('faded');
+  neighborhood.removeClass('faded').addClass('highlighted');
+  neighborhood.nodes().forEach(n => {
+    let parent = n.parent();
+    while (parent && parent.length > 0) {
+      parent.removeClass('faded');
+      parent = parent.parent();
+    }
+  });
+  if (hoveredNode && !hoveredNode.hasClass('faded')) renderNodeTooltip(hoveredNode);
+}
+
+cy.on('tap', 'node', evt => {
+  const node = evt.target;
+  if (isCollapsible(node)) {
+    toggleFolder(node.id());
+    return;
+  }
+  const id = node.id();
+  if (selectedNodes.has(id)) selectedNodes.delete(id);
+  else selectedNodes.add(id);
+  applyFocus();
+});
+
+cy.on('tap', evt => {
+  if (evt.target === cy) {
+    selectedNodes.clear();
+    cy.elements().removeClass('faded highlighted');
+  }
+});
+
+let hoveredNode = null;
+
+function renderNodeTooltip(node) {
+  const d = node.data();
+  const focused = node.hasClass('highlighted');
+  tooltip.querySelector('.tt-name').textContent = d.label;
+  tooltip.querySelector('.tt-doc').textContent = d.docstring || '(no docstring)';
+  const labels = { entry: 'Top-level', leaf: 'Utility', intermediate: 'Intermediate', isolated: 'Isolated' };
+  tooltip.querySelector('.tt-type').textContent = labels[d.type] || d.type;
+  const symsEl = tooltip.querySelector('.tt-symbols');
+  if (focused && d.symbols) {
+    symsEl.innerHTML = renderSymbolLines(d.symbols);
+    symsEl.style.display = 'block';
+  } else {
+    symsEl.style.display = 'none';
+  }
+  tooltip.style.display = 'block';
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renderSymbolLines(text) {
+  return text.split('\n').map(l => {
+    const [type, ...rest] = l.split(' ');
+    return `<span style="color:#8b7cf8;font-weight:700">${escapeHtml(type)}</span> <span style="color:#fff;font-weight:500">${escapeHtml(rest.join(' '))}</span>`;
+  }).join('<br>');
+}
+
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 16) + 'px';
+  tooltip.style.top  = (e.clientY + 16) + 'px';
+}
+
+cy.on('mouseover', 'node', evt => {
+  if (evt.target.hasClass('faded')) return;
+  if (isCollapsible(evt.target)) return;
+  hoveredNode = evt.target;
+  renderNodeTooltip(hoveredNode);
+});
+
+cy.on('mousemove', 'node', evt => moveTooltip(evt.originalEvent));
+cy.on('mouseout',  'node', () => { hoveredNode = null; hideTooltip(); });
+
+cy.on('mouseover', 'edge.highlighted', evt => {
+  const d = evt.target.data();
+  if (!d.label) return;
+  tooltip.querySelector('.tt-name').textContent = '';
+  tooltip.querySelector('.tt-doc').innerHTML = renderSymbolLines(d.label);
+  tooltip.querySelector('.tt-type').textContent = '';
+  tooltip.querySelector('.tt-symbols').style.display = 'none';
+  tooltip.style.display = 'block';
+});
+
+cy.on('mousemove', 'edge', evt => moveTooltip(evt.originalEvent));
+cy.on('mouseout',  'edge', hideTooltip);
+
+cy.on('dblclick', 'node', evt => {
+  if (isCollapsible(evt.target)) return;
+  const filepath = evt.target.data('filepath');
+  if (!filepath) return;
+  fetch('/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: filepath }),
+  });
+});
+
+let firstLoad = true;
+
+function runLayout(fit, newNodeIds = new Set()) {
+  // If many new nodes arrived, do a full re-layout so dagre can place everything properly
+  const fullRelayout = newNodeIds.size > 2 || firstLoad;
+
+  const frozenPositions = {};
+  if (!fullRelayout) {
+    cy.nodes().forEach(n => {
+      if (!newNodeIds.has(n.id())) frozenPositions[n.id()] = { ...n.position() };
+    });
+  }
+
+  cy.layout({
+    name: 'dagre',
+    rankDir: 'LR',
+    nodeSep: 20,
+    rankSep: 80,
+    edgeSep: 10,
+    compound: true,
+    animate: !firstLoad,
+    animationDuration: 400,
+    fit,
+    padding: 48,
+    transform: (node, pos) => {
+      if (userPositions[node.id()])   return userPositions[node.id()];
+      if (frozenPositions[node.id()]) return frozenPositions[node.id()];
+      return pos;
+    }
+  }).run();
+  applyCollapse();
+  applyFocus();
+}
+
+function setStatus(msg, ok = true) {
+  statusEl.textContent = msg;
+  statusEl.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
+function indexElements(elements) {
+  const nodeIds = new Set(), edgeIds = new Set();
+  const nodeMap = {}, edgeMap = {};
+  for (const el of elements) {
+    if (el.data.source) { edgeIds.add(el.data.id); edgeMap[el.data.id] = el; }
+    else                { nodeIds.add(el.data.id); nodeMap[el.data.id] = el; }
+  }
+  return { nodeIds, edgeIds, nodeMap, edgeMap };
+}
+
+function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
+  // Remove stale nodes and edges
+  cy.nodes().forEach(n => {
+    if (!nodeIds.has(n.id())) {
+      delete userPositions[n.id()];
+      savedParents.delete(n.id());
+      savedPositions.delete(n.id());
+      n.remove();
+    }
+  });
+  cy.edges().forEach(e => { if (!edgeIds.has(e.id())) e.remove(); });
+
+  // Upsert nodes — parents first so children can reference them
+  const sorted = Object.values(nodeMap).sort((a, b) =>
+    (a.data.parent ? 1 : 0) - (b.data.parent ? 1 : 0)
+  );
+  const addedNodes = [];
+  for (const el of sorted) {
+    const existing = cy.getElementById(el.data.id);
+    if (existing.length > 0) {
+      // Don't overwrite parent — managed by collapse logic via move()
+      const { parent, ...rest } = el.data;
+      existing.data(rest);
+      existing.removeClass('new-node');
+    } else {
+      cy.add(el);
+      addedNodes.push(el.data.id);
+    }
+  }
+
+  // Upsert edges
+  for (const [id, el] of Object.entries(edgeMap)) {
+    if (cy.getElementById(id).length === 0) cy.add(el);
+  }
+
+  return addedNodes;
+}
+
+function trackCompoundNodes(elements) {
+  compoundNodes.clear();
+  for (const el of elements) {
+    if (el.data.parent) compoundNodes.add(el.data.parent);
+    if (el.data.is_folder) compoundNodes.add(el.data.id);
+  }
+}
+
+function highlightNewNodes(addedNodes) {
+  addedNodes.forEach(id => cy.getElementById(id).addClass('new-node'));
+  setTimeout(() => addedNodes.forEach(id => cy.getElementById(id).removeClass('new-node')), 5000);
+}
+
+async function refresh() {
+  try {
+    const resp = await fetch('/graph.json?t=' + Date.now());
+    if (resp.status === 404) {
+      // graph.json not generated yet — keep waiting
+      setStatus('Waiting for analysis…', false);
+      return;
+    }
+    if (!resp.ok) { setStatus('Error ' + resp.status, false); return; }
+    const newElements = await resp.json();
+
+    if (newElements.length === 0) {
+      // No modules found — clear graph, don't crash
+      cy.elements().remove();
+      setStatus('No modules found · ' + new Date().toLocaleTimeString());
+      firstLoad = false;
+      return;
+    }
+
+    const index = indexElements(newElements);
+    const addedNodes = reconcileGraph(index);
+    trackCompoundNodes(newElements);
+
+    if (!firstLoad && addedNodes.length > 0) highlightNewNodes(addedNodes);
+
+    if (firstLoad || addedNodes.length > 0) {
+      if (firstLoad) compoundNodes.forEach(id => expandedFolders.add(id));
+      runLayout(firstLoad, new Set(addedNodes));
+      if (firstLoad) updateFolderLabels();
+      firstLoad = false;
+    } else {
+      applyCollapse();
+      applyFocus();
+    }
+
+    const n = cy.nodes().length;
+    setStatus(`${n} module${n !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`);
+  } catch(e) {
+    console.error('refresh error:', e);
+    setStatus('Fetch error: ' + e.message, false);
+  }
+}
+
+document.getElementById('btn-save').addEventListener('click', async () => {
+  const allPositions = {};
+  cy.nodes().forEach(n => { allPositions[n.id()] = { ...n.position() }; });
+  try {
+    const resp = await fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(allPositions),
+    });
+    if (resp.ok) {
+      const result = await resp.json();
+      setStatus('Saved · ' + (result.drawio || ''));
+      Object.assign(userPositions, allPositions);
+    } else {
+      setStatus('Save failed: ' + resp.status, false);
+    }
+  } catch(e) { setStatus('Save error', false); }
+});
+
+document.getElementById('btn-layout').addEventListener('click', () => {
+  Object.keys(userPositions).forEach(k => delete userPositions[k]);
+  runLayout(true, new Set(cy.nodes().map(n => n.id())));
+});
+
+document.getElementById('btn-fit').addEventListener('click', () => cy.fit(48));
+
+document.getElementById('btn-png').addEventListener('click', () => {
+  const png = cy.png({ output: 'blob', bg: '#0a0a0d', scale: 2, full: true });
+  const url = URL.createObjectURL(png);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'architecture.png';
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('PNG saved');
+});
+
+refresh();
+const refreshTimer = setInterval(refresh, REFRESH_MS);
+
+// ── Diff view ──────────────────────────────────────────────────────────
+const diffSelect = document.getElementById('diff-ref');
+let diffState = null;
+
+async function loadRefs() {
+  try {
+    const resp = await fetch('/refs?t=' + Date.now());
+    if (!resp.ok) return;
+    const refs = await resp.json();
+    // Clear existing options except the first
+    while (diffSelect.options.length > 1) diffSelect.remove(1);
+
+    if (refs.branches.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Branches';
+      refs.branches.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b; opt.textContent = b;
+        grp.appendChild(opt);
+      });
+      diffSelect.appendChild(grp);
+    }
+    if (refs.tags.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Tags';
+      refs.tags.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        grp.appendChild(opt);
+      });
+      diffSelect.appendChild(grp);
+    }
+    if (refs.commits.length) {
+      const grp = document.createElement('optgroup');
+      grp.label = 'Commits';
+      refs.commits.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.hash;
+        opt.textContent = c.hash.slice(0,7) + ' ' + c.message.slice(0,40);
+        grp.appendChild(opt);
+      });
+      diffSelect.appendChild(grp);
+    }
+  } catch(e) {}
+}
+// loadRefs is called from feature check below
+
+function clearDiff() {
+  diffState = null;
+  cy.elements('[?_diff_ghost]').remove();
+  cy.elements().removeClass('diff-added diff-removed diff-modified');
+}
+
+function applyDiff(diff) {
+  diffState = diff;
+
+  // Add ghost elements for removed nodes/edges
+  diff.removed_elements.forEach(el => {
+    const d = { ...el.data, _diff_ghost: true };
+    if (!d.color) d.color = '#3a3a46';
+    if (!d.textColor) d.textColor = '#e2e2e8';
+    // Remove parent ref — ghost nodes are free-floating
+    delete d.parent;
+    cy.add({ data: d });
+  });
+
+  // Apply CSS classes
+  diff.added_nodes.forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-added');
+  });
+  diff.removed_nodes.forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-removed');
+  });
+  diff.modified_nodes.forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-modified');
+  });
+  diff.added_edges.forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-added');
+  });
+  diff.removed_edges.forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-removed');
+  });
+
+  // Run layout to place ghost nodes
+  runLayout(true, new Set(diff.removed_nodes));
+
+  const parts = [];
+  if (diff.added_nodes.length) parts.push(`<span class="diff-badge diff-badge-add">+${diff.added_nodes.length}</span>`);
+  if (diff.removed_nodes.length) parts.push(`<span class="diff-badge diff-badge-del">-${diff.removed_nodes.length}</span>`);
+  if (diff.modified_nodes.length) parts.push(`<span class="diff-badge diff-badge-mod">~${diff.modified_nodes.length}</span>`);
+  statusEl.innerHTML = parts.length ? `Diff vs ${diff.ref} ` + parts.join(' ') : `Diff vs ${diff.ref} — no changes`;
+}
+
+diffSelect.addEventListener('change', async () => {
+  clearDiff();
+  const ref = diffSelect.value;
+  if (!ref) {
+    refresh();
+    return;
+  }
+  setStatus('Computing diff…');
+  try {
+    const resp = await fetch('/diff?ref=' + encodeURIComponent(ref));
+    if (!resp.ok) {
+      const err = await resp.json();
+      setStatus(err.error || 'Diff failed', false);
+      diffSelect.value = '';
+      return;
+    }
+    applyDiff(await resp.json());
+  } catch(e) {
+    setStatus('Diff error: ' + e.message, false);
+    diffSelect.value = '';
+  }
+});
+
+// ── Annotations ────────────────────────────────────────────────────────
+const annoLayer = document.getElementById('anno-layer');
+const annoViewport = document.getElementById('anno-viewport');
+let activeTool = null;
+let annotations = [];
+let drawState = null;
+let boxPreview = null;
+
+function syncViewport() {
+  const pan = cy.pan();
+  const zoom = cy.zoom();
+  annoViewport.style.transform = `translate(${pan.x}px,${pan.y}px) scale(${zoom})`;
+}
+cy.on('viewport', syncViewport);
+
+async function loadAnnotations() {
+  try {
+    const resp = await fetch('/annotations.json?t=' + Date.now());
+    if (resp.ok) annotations = await resp.json();
+  } catch(e) {}
+  renderAnnotations();
+}
+
+async function saveAnnotations() {
+  try {
+    await fetch('/annotations', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(annotations),
+    });
+  } catch(e) {}
+}
+
+function renderAnnotations() {
+  annoViewport.innerHTML = '';
+  const isEraser = activeTool === 'eraser';
+  annoViewport.classList.toggle('eraser-active', isEraser);
+
+  annotations.forEach(ann => {
+    const el = document.createElement('div');
+    el.dataset.id = ann.id;
+    el.className = 'annotation anno-' + ann.type;
+
+    if (ann.type === 'box') {
+      el.style.left = ann.x + 'px';
+      el.style.top = ann.y + 'px';
+      el.style.width = ann.w + 'px';
+      el.style.height = ann.h + 'px';
+      el.style.borderColor = ann.color || '#8b7cf8';
+      if (ann.label) {
+        const lbl = document.createElement('span');
+        lbl.className = 'anno-box-label';
+        lbl.textContent = ann.label;
+        lbl.style.color = ann.color || '#8b7cf8';
+        el.appendChild(lbl);
+      }
+    } else if (ann.type === 'text') {
+      el.style.left = ann.x + 'px';
+      el.style.top = ann.y + 'px';
+      el.textContent = ann.text;
+      el.style.color = ann.color || '#ffffff';
+      el.style.fontSize = (ann.fontSize || 16) + 'px';
+    }
+
+    if (isEraser) {
+      el.addEventListener('click', () => {
+        annotations = annotations.filter(a => a.id !== ann.id);
+        renderAnnotations();
+        saveAnnotations();
+      });
+    }
+
+    annoViewport.appendChild(el);
+  });
+}
+
+function screenToModel(clientX, clientY) {
+  const rect = annoLayer.getBoundingClientRect();
+  const pan = cy.pan();
+  const zoom = cy.zoom();
+  return {
+    x: (clientX - rect.left - pan.x) / zoom,
+    y: (clientY - rect.top - pan.y) / zoom,
+  };
+}
+
+function setTool(tool) {
+  activeTool = tool || null;
+  document.querySelectorAll('.tool-btn').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.tool || null) === activeTool);
+  });
+  annoLayer.classList.remove('tool-active', 'tool-text');
+  if (activeTool === 'box') annoLayer.classList.add('tool-active');
+  else if (activeTool === 'text') annoLayer.classList.add('tool-active', 'tool-text');
+  renderAnnotations();
+}
+
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tool = btn.dataset.tool || null;
+    setTool(activeTool === tool ? null : tool);
+  });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && activeTool) {
+    if (drawState && boxPreview) { boxPreview.remove(); boxPreview = null; }
+    drawState = null;
+    setTool(null);
+  }
+});
+
+// Box drawing
+annoLayer.addEventListener('mousedown', e => {
+  if (activeTool !== 'box') return;
+  const pos = screenToModel(e.clientX, e.clientY);
+  drawState = { startX: pos.x, startY: pos.y };
+  boxPreview = document.createElement('div');
+  boxPreview.className = 'annotation anno-box anno-preview';
+  boxPreview.style.borderColor = '#8b7cf8';
+  boxPreview.style.left = pos.x + 'px';
+  boxPreview.style.top = pos.y + 'px';
+  boxPreview.style.width = '0px';
+  boxPreview.style.height = '0px';
+  annoViewport.appendChild(boxPreview);
+  e.preventDefault();
+});
+
+annoLayer.addEventListener('mousemove', e => {
+  if (activeTool !== 'box' || !drawState || !boxPreview) return;
+  const pos = screenToModel(e.clientX, e.clientY);
+  const x = Math.min(drawState.startX, pos.x);
+  const y = Math.min(drawState.startY, pos.y);
+  boxPreview.style.left = x + 'px';
+  boxPreview.style.top = y + 'px';
+  boxPreview.style.width = Math.abs(pos.x - drawState.startX) + 'px';
+  boxPreview.style.height = Math.abs(pos.y - drawState.startY) + 'px';
+});
+
+annoLayer.addEventListener('mouseup', e => {
+  if (activeTool !== 'box' || !drawState) return;
+  const pos = screenToModel(e.clientX, e.clientY);
+  const x = Math.min(drawState.startX, pos.x);
+  const y = Math.min(drawState.startY, pos.y);
+  const w = Math.abs(pos.x - drawState.startX);
+  const h = Math.abs(pos.y - drawState.startY);
+  if (boxPreview) { boxPreview.remove(); boxPreview = null; }
+  drawState = null;
+  if (w < 20 || h < 20) return;
+  const label = prompt('Label (or leave empty):') || '';
+  annotations.push({ id: 'ann_' + Date.now(), type: 'box', x, y, w, h, label, color: '#8b7cf8' });
+  renderAnnotations();
+  saveAnnotations();
+});
+
+// Text placement
+annoLayer.addEventListener('click', e => {
+  if (activeTool !== 'text') return;
+  const pos = screenToModel(e.clientX, e.clientY);
+  const text = prompt('Text:');
+  if (!text) return;
+  annotations.push({ id: 'ann_' + Date.now(), type: 'text', x: pos.x, y: pos.y, text, color: '#ffffff', fontSize: 16 });
+  renderAnnotations();
+  saveAnnotations();
+});
+
+// Zoom pass-through while in annotation mode
+annoLayer.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = document.getElementById('cy').getBoundingClientRect();
+  const level = cy.zoom() * (e.deltaY > 0 ? 0.9 : 1.1);
+  cy.zoom({
+    level: Math.max(0.1, Math.min(3, level)),
+    renderedPosition: { x: e.clientX - rect.left, y: e.clientY - rect.top },
+  });
+  syncViewport();
+}, { passive: false });
+
+loadRefs();
+loadAnnotations();
+setTimeout(syncViewport, 200);
+});
+</script>
+</body>
+</html>
