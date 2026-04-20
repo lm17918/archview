@@ -6,7 +6,7 @@ ArchView gives you a live, interactive map of any Python project's architecture 
 
 Built for developers who vibe-code and need to stay oriented, or anyone inheriting a codebase they didn't write.
 
-![ArchView interface](docs/interface.png)
+![ArchView interface](https://raw.githubusercontent.com/lm17918/archview/main/docs/interface.png)
 
 ## Why
 
@@ -45,16 +45,10 @@ archview /path/to/project --port 8080 --interval 5
 | **Gray** | Isolated — no import relationships |
 | **Red (bright)** | Syntax errors — files that failed to parse |
 
-<!-- TODO: replace with actual GIF -->
-![Node colors and types](docs/colors.gif)
-
 ## Features
 
 ### Live refresh
 Edit your code, save — the graph updates automatically. No restart needed.
-
-<!-- TODO: replace with actual GIF -->
-![Live refresh](docs/live-refresh.gif)
 
 ### Interactive exploration
 - **Hover** a node to see its docstring, type, and exported symbols
@@ -62,9 +56,6 @@ Edit your code, save — the graph updates automatically. No restart needed.
 - **Double-click** to open the file in VS Code
 - **Drag** nodes to rearrange the layout
 - **Click folders** to collapse/expand entire packages
-
-<!-- TODO: replace with actual GIF -->
-![Interactive exploration](docs/interaction.gif)
 
 ### Dependency highlighting
 Hover over an edge to see exactly which symbols are imported. Click a node and its entire dependency chain lights up — everything else fades.
