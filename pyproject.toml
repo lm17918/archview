@@ -28,6 +28,7 @@ Issues = "https://github.com/lm17918/archview/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=7.0.0"]
+dev = ["pytest>=7.0.0", "black>=24.0.0", "flake8>=7.0.0"]
 
 [project.scripts]
 archview = "archview.cli:main"
@@ -42,3 +43,7 @@ include = ["archview*"]
 
 [tool.setuptools.package-data]
 archview = ["static/*.html", "static/*.js"]
+
+[tool.black]
+target-version = ["py39"]
+line-length = 88

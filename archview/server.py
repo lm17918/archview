@@ -16,30 +16,25 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
     interval: int = 10
 
     MIME = {
-        ".js":   "application/javascript",
+        ".js": "application/javascript",
         ".html": "text/html; charset=utf-8",
         ".json": "application/json",
-        ".css":  "text/css",
+        ".css": "text/css",
     }
 
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/" and "interval" not in self.path:
             self.send_response(302)
-            self.send_header(
-                "Location", f"/live.html?interval={self.interval}")
+            self.send_header("Location", f"/live.html?interval={self.interval}")
             self.end_headers()
             return
         elif path in ("/", "/live.html"):
-            self._serve_file(
-                self.static_dir / "live.html",
-                "text/html; charset=utf-8")
+            self._serve_file(self.static_dir / "live.html", "text/html; charset=utf-8")
         elif path == "/graph.json":
-            self._serve_file(
-                self.data_dir / "graph.json", "application/json")
+            self._serve_file(self.data_dir / "graph.json", "application/json")
         elif path == "/positions.json":
-            self._serve_file(
-                self.data_dir / "positions.json", "application/json")
+            self._serve_file(self.data_dir / "positions.json", "application/json")
         elif path == "/annotations.json":
             annotations.handle_annotations_get(self)
         elif path == "/refs":
@@ -80,8 +75,7 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
     def _read_json_body(self):
         length = int(self.headers.get("Content-Length", 0))
         if length > self.MAX_BODY_SIZE:
-            self._json_response(
-                {"ok": False, "error": "payload too large"}, 413)
+            self._json_response({"ok": False, "error": "payload too large"}, 413)
             return None
         return json.loads(self.rfile.read(length))
 
@@ -104,8 +98,7 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
                 abs_path = (self.project_dir / filepath).resolve(strict=True)
                 abs_path.relative_to(self.project_dir.resolve(strict=True))
             except (ValueError, OSError):
-                self._json_response(
-                    {"ok": False, "error": "path outside project"}, 403)
+                self._json_response({"ok": False, "error": "path outside project"}, 403)
                 return
             try:
                 subprocess.Popen(["code", "--goto", str(abs_path)])
@@ -117,8 +110,7 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
         positions = self._read_json_body()
         if positions is None:
             return
-        (self.data_dir / "positions.json").write_text(
-            json.dumps(positions, indent=2))
+        (self.data_dir / "positions.json").write_text(json.dumps(positions, indent=2))
         self._json_response({"ok": True})
         print("  Saved positions")
 
@@ -142,14 +134,19 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def make_server(host: str, port: int, static_dir: Path, data_dir: Path,
-                project_dir: Path, interval: int = 10,
-                ignore_file: Path | None = None):
+def make_server(
+    host: str,
+    port: int,
+    static_dir: Path,
+    data_dir: Path,
+    project_dir: Path,
+    interval: int = 10,
+    ignore_file: Path | None = None,
+):
     ArchviewHandler.static_dir = Path(static_dir)
     ArchviewHandler.data_dir = Path(data_dir)
     ArchviewHandler.project_dir = Path(project_dir)
     ArchviewHandler.ignore_file = ignore_file
     ArchviewHandler.interval = interval
     http.server.ThreadingHTTPServer.allow_reuse_address = True
-    return http.server.ThreadingHTTPServer(
-        (host, port), ArchviewHandler)
+    return http.server.ThreadingHTTPServer((host, port), ArchviewHandler)

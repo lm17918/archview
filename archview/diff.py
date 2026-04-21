@@ -29,10 +29,8 @@ def handle_diff(handler):
         handler._json_response({"error": "diff already running"}, 429)
         return
     try:
-        old = _generate_old_graph(
-            handler.project_dir, ref, handler.ignore_file)
-        cur = generate_graph_json(
-            handler.project_dir, handler.ignore_file)
+        old = _generate_old_graph(handler.project_dir, ref, handler.ignore_file)
+        cur = generate_graph_json(handler.project_dir, handler.ignore_file)
         handler._json_response(_compute_diff(cur, old, ref))
     except subprocess.CalledProcessError:
         handler._json_response({"error": f"invalid ref: {ref}"}, 400)
@@ -47,27 +45,34 @@ def _list_refs(project_dir: Path) -> dict:
     try:
         log = subprocess.run(
             ["git", "log", "--oneline", "-20"],
-            cwd=project_dir, capture_output=True, text=True, check=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         for line in log.stdout.strip().splitlines():
             if not line:
                 continue
             parts = line.split(None, 1)
-            result["commits"].append({
-                "hash": parts[0],
-                "message": parts[1] if len(parts) > 1 else "",
-            })
+            result["commits"].append(
+                {
+                    "hash": parts[0],
+                    "message": parts[1] if len(parts) > 1 else "",
+                }
+            )
     except subprocess.CalledProcessError:
         pass
 
     try:
         branches = subprocess.run(
             ["git", "branch", "--format=%(refname:short)"],
-            cwd=project_dir, capture_output=True, text=True, check=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         result["branches"] = [
-            b.strip() for b in branches.stdout.strip().splitlines()
-            if b.strip()
+            b.strip() for b in branches.stdout.strip().splitlines() if b.strip()
         ]
     except subprocess.CalledProcessError:
         pass
@@ -75,11 +80,13 @@ def _list_refs(project_dir: Path) -> dict:
     try:
         tags = subprocess.run(
             ["git", "tag"],
-            cwd=project_dir, capture_output=True, text=True, check=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         result["tags"] = [
-            t.strip() for t in tags.stdout.strip().splitlines()
-            if t.strip()
+            t.strip() for t in tags.stdout.strip().splitlines() if t.strip()
         ]
     except subprocess.CalledProcessError:
         pass
@@ -87,24 +94,33 @@ def _list_refs(project_dir: Path) -> dict:
     return result
 
 
-def _generate_old_graph(project_dir: Path, ref: str,
-                        ignore_file: Path | None) -> list[dict]:
+def _generate_old_graph(
+    project_dir: Path, ref: str, ignore_file: Path | None
+) -> list[dict]:
     project_dir = Path(project_dir)
     subprocess.run(
         ["git", "rev-parse", "--verify", ref],
-        cwd=project_dir, capture_output=True, text=True, check=True,
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     tmpdir = tempfile.mkdtemp(prefix="archview_diff_")
     try:
         subprocess.run(
             ["git", "worktree", "add", "--detach", tmpdir, ref],
-            cwd=project_dir, capture_output=True, text=True, check=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return generate_graph_json(Path(tmpdir), ignore_file)
     finally:
         subprocess.run(
             ["git", "worktree", "remove", "--force", tmpdir],
-            cwd=project_dir, capture_output=True, text=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
         )
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -113,8 +129,7 @@ def _element_fingerprint(el: dict) -> str:
     d = el["data"]
     if "source" in d:
         return f"{d.get('source')}|{d.get('target')}|{d.get('label', '')}"
-    return (f"{d.get('type', '')}|{d.get('symbols', '')}"
-            f"|{d.get('docstring', '')}")
+    return f"{d.get('type', '')}|{d.get('symbols', '')}" f"|{d.get('docstring', '')}"
 
 
 def _compute_diff(current: list[dict], old: list[dict], ref: str) -> dict:
@@ -138,14 +153,12 @@ def _compute_diff(current: list[dict], old: list[dict], ref: str) -> dict:
 
     modified_nodes = []
     for nid in sorted(set(cur_nodes) & set(old_nodes)):
-        if _element_fingerprint(cur_nodes[nid]) != \
-           _element_fingerprint(old_nodes[nid]):
+        if _element_fingerprint(cur_nodes[nid]) != _element_fingerprint(old_nodes[nid]):
             modified_nodes.append(nid)
 
     modified_edges = []
     for eid in sorted(set(cur_edges) & set(old_edges)):
-        if _element_fingerprint(cur_edges[eid]) != \
-           _element_fingerprint(old_edges[eid]):
+        if _element_fingerprint(cur_edges[eid]) != _element_fingerprint(old_edges[eid]):
             modified_edges.append(eid)
 
     removed_elements = []

@@ -1,4 +1,5 @@
 """Tests for archview graph generation and server."""
+
 import json
 import threading
 import time
@@ -10,15 +11,17 @@ import pytest
 from archview.graph import collect_py_files, generate_graph
 from archview.server import make_server
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def proj(tmp_path):
     """Minimal project: one top-level script importing two utilities."""
-    (tmp_path / "main.py").write_text('"""Main entry."""\nimport utils.helper\nimport utils.math\n')
+    (tmp_path / "main.py").write_text(
+        '"""Main entry."""\nimport utils.helper\nimport utils.math\n'
+    )
     (tmp_path / "utils").mkdir()
     (tmp_path / "utils" / "__init__.py").write_text("")
     (tmp_path / "utils" / "helper.py").write_text('"""Helper utility."""\n')
@@ -33,13 +36,18 @@ def run(project_dir, tmp_path, ignore_file=None):
     generate_graph(project_dir, ignore_file, graph_path)
     elements = json.loads(graph_path.read_text())
     nodes = {e["data"]["id"]: e["data"] for e in elements if "source" not in e["data"]}
-    edges = [(e["data"]["source"], e["data"]["target"]) for e in elements if "source" in e["data"]]
+    edges = [
+        (e["data"]["source"], e["data"]["target"])
+        for e in elements
+        if "source" in e["data"]
+    ]
     return nodes, edges
 
 
 # ---------------------------------------------------------------------------
 # File collection
 # ---------------------------------------------------------------------------
+
 
 def test_collects_all_py_files(proj, tmp_path):
     files = collect_py_files(proj, None)
@@ -98,16 +106,16 @@ def test_no_ignore_file(proj, tmp_path):
 # ---------------------------------------------------------------------------
 
 COLORS = {
-    "entry":        "#6ee7b7",
+    "entry": "#6ee7b7",
     "intermediate": "#93c5fd",
-    "leaf":         "#fca5a5",
-    "isolated":     "#3a3a46",
+    "leaf": "#fca5a5",
+    "isolated": "#3a3a46",
 }
 TEXT_COLORS = {
-    "entry":        "#0a2a1a",
+    "entry": "#0a2a1a",
     "intermediate": "#0a1a2e",
-    "leaf":         "#2e0a0a",
-    "isolated":     "#e2e2e8",
+    "leaf": "#2e0a0a",
+    "isolated": "#e2e2e8",
 }
 
 
@@ -159,6 +167,7 @@ def test_text_color_for_entry_is_dark(proj, tmp_path):
 # Edge direction — arrows point FROM dependency TO importer
 # ---------------------------------------------------------------------------
 
+
 def test_edge_points_from_dependency_to_importer(proj, tmp_path):
     """main imports helper → edge should be helper → main (dep feeds importer)."""
     nodes, edges = run(proj, tmp_path)
@@ -175,6 +184,7 @@ def test_no_edge_pointing_from_importer_to_dep(proj, tmp_path):
 # ---------------------------------------------------------------------------
 # Docstrings
 # ---------------------------------------------------------------------------
+
 
 def test_docstring_extraction(proj, tmp_path):
     nodes, _ = run(proj, tmp_path)
@@ -198,6 +208,7 @@ def test_long_docstring_is_truncated(proj, tmp_path):
 # ---------------------------------------------------------------------------
 # Graph structure
 # ---------------------------------------------------------------------------
+
 
 def test_init_file_collapsed_to_package(proj, tmp_path):
     """utils/__init__.py should appear as 'utils', not 'utils.__init__'."""
@@ -227,6 +238,7 @@ def test_ignored_file_has_no_edges(proj, tmp_path):
 # ---------------------------------------------------------------------------
 # Folder (synthetic compound) nodes
 # ---------------------------------------------------------------------------
+
 
 def test_folder_label_has_no_slash(tmp_path):
     """Synthetic folder labels must not contain trailing '/'."""
@@ -269,10 +281,15 @@ def test_package_with_init_is_not_folder(tmp_path):
 # Edge labels carry imported symbols
 # ---------------------------------------------------------------------------
 
+
 def test_edge_label_contains_imported_names(proj, tmp_path):
     """Edge label must list the symbols imported across the dependency."""
-    (proj / "utils" / "helper.py").write_text('"""Helper."""\ndef do_stuff(): pass\nclass Widget: pass\n')
-    (proj / "main.py").write_text('"""Main."""\nfrom utils.helper import do_stuff, Widget\n')
+    (proj / "utils" / "helper.py").write_text(
+        '"""Helper."""\ndef do_stuff(): pass\nclass Widget: pass\n'
+    )
+    (proj / "main.py").write_text(
+        '"""Main."""\nfrom utils.helper import do_stuff, Widget\n'
+    )
     data_dir = tmp_path / ".archview"
     data_dir.mkdir(exist_ok=True)
     graph_path = data_dir / "graph.json"
@@ -280,7 +297,8 @@ def test_edge_label_contains_imported_names(proj, tmp_path):
     elements = json.loads(graph_path.read_text())
     edge_labels = {
         (e["data"]["source"], e["data"]["target"]): e["data"]["label"]
-        for e in elements if "source" in e["data"]
+        for e in elements
+        if "source" in e["data"]
     }
     label = edge_labels.get(("utils.helper", "main"), "")
     assert "do_stuff" in label
@@ -290,6 +308,7 @@ def test_edge_label_contains_imported_names(proj, tmp_path):
 # ---------------------------------------------------------------------------
 # Performance
 # ---------------------------------------------------------------------------
+
 
 def test_analysis_completes_quickly(tmp_path):
     """100-file project must analyze in under 2 seconds."""
@@ -307,12 +326,29 @@ def test_analysis_completes_quickly(tmp_path):
 # Server endpoints
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def server(tmp_path):
     static_dir = Path(__file__).parent.parent / "archview" / "static"
     data_dir = tmp_path / ".archview"
     data_dir.mkdir()
-    (data_dir / "graph.json").write_text('[{"data":{"id":"a","label":"a","color":"#fff","textColor":"#000","type":"isolated","docstring":"","group":""}}]')
+    (data_dir / "graph.json").write_text(
+        json.dumps(
+            [
+                {
+                    "data": {
+                        "id": "a",
+                        "label": "a",
+                        "color": "#fff",
+                        "textColor": "#000",
+                        "type": "isolated",
+                        "docstring": "",
+                        "group": "",
+                    }
+                }
+            ]
+        )
+    )
 
     srv = make_server("127.0.0.1", 19091, static_dir, data_dir, tmp_path)
     t = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -356,8 +392,10 @@ def test_server_handles_concurrent_requests(server):
         resp = urllib.request.urlopen(url)
         return resp.status
 
-    urls = [f"http://127.0.0.1:19091/{f}" for f in
-            ("", "graph.json", "cytoscape.min.js", "dagre.min.js")]
+    urls = [
+        f"http://127.0.0.1:19091/{f}"
+        for f in ("", "graph.json", "cytoscape.min.js", "dagre.min.js")
+    ]
     with ThreadPoolExecutor(max_workers=4) as pool:
         futures = [pool.submit(fetch, u) for u in urls]
         results = [f.result(timeout=5) for f in as_completed(futures)]

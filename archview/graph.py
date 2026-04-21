@@ -15,35 +15,44 @@ SYM_VAR = "var"
 
 # (background, text) colors per node role
 NODE_COLORS = {
-    "entry":        ("#6ee7b7", "#0a2a1a"),
+    "entry": ("#6ee7b7", "#0a2a1a"),
     "intermediate": ("#93c5fd", "#0a1a2e"),
-    "leaf":         ("#fca5a5", "#2e0a0a"),
-    "isolated":     ("#3a3a46", "#e2e2e8"),
-    "error":        ("#dc2626", "#ffffff"),
+    "leaf": ("#fca5a5", "#2e0a0a"),
+    "isolated": ("#3a3a46", "#e2e2e8"),
+    "error": ("#dc2626", "#ffffff"),
 }
 
 
-def _collect_files_by_ext(project_dir: Path, ignore_file: Path | None, ext: str) -> list[str]:
-    """Return sorted list of relative paths with given extension, git-aware and ignore-filtered."""
+def _collect_files_by_ext(
+    project_dir: Path, ignore_file: Path | None, ext: str
+) -> list[str]:
+    """Return sorted relative paths with given extension (git-aware, ignore-safe)."""
     project_dir = Path(project_dir)
     glob = f"*{ext}"
 
     try:
         result = subprocess.run(
             ["git", "ls-files", glob],
-            cwd=project_dir, capture_output=True, text=True, check=True
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         found = set(result.stdout.strip().splitlines())
 
         untracked = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", glob],
-            cwd=project_dir, capture_output=True, text=True
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
         )
         found.update(untracked.stdout.strip().splitlines())
 
         deleted = subprocess.run(
             ["git", "ls-files", "--deleted", glob],
-            cwd=project_dir, capture_output=True, text=True
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
         )
         found -= set(deleted.stdout.strip().splitlines())
 
@@ -94,8 +103,9 @@ def _find_target(imp: str, modules: dict) -> str | None:
     return None
 
 
-def _resolve_relative_import(mod: str, level: int, sub: str | None,
-                              modules: dict) -> str | None:
+def _resolve_relative_import(
+    mod: str, level: int, sub: str | None, modules: dict
+) -> str | None:
     """Resolve a PEP 328 relative import to an absolute module id.
 
     For a package (__init__.py), level=1 anchors to the package itself; for a
@@ -107,22 +117,23 @@ def _resolve_relative_import(mod: str, level: int, sub: str | None,
     hops = level - 1 if is_package else level
     if hops < 0 or hops > len(parts):
         return None
-    base_parts = parts[:len(parts) - hops] if hops else parts
+    base_parts = parts[: len(parts) - hops] if hops else parts
     base = ".".join(base_parts)
     if sub:
         return f"{base}.{sub}" if base else sub
     return base or None
 
 
-def _build_module_index(project_dir: Path, files: list[str], ext: str = ".py",
-                        keep_ext: bool = False):
+def _build_module_index(
+    project_dir: Path, files: list[str], ext: str = ".py", keep_ext: bool = False
+):
     """Map relative paths to module ids and absolute paths.
 
     When keep_ext is True the extension is baked into the id using '_' so that
     'config.yaml' becomes 'config_yaml' instead of colliding with 'config.py'.
     """
-    modules = {}      # mod -> absolute path
-    module_rel = {}   # mod -> relative path
+    modules = {}  # mod -> absolute path
+    module_rel = {}  # mod -> relative path
     for rel in files:
         full = project_dir / rel
         if not full.is_file():
@@ -139,7 +150,7 @@ def _build_module_index(project_dir: Path, files: list[str], ext: str = ".py",
 
 
 def _parse_modules(modules: dict[str, Path]):
-    """Parse each module via AST. Returns docstrings, symbols, parsed trees, and errors."""
+    """Parse each module via AST. Returns docstrings, symbols, trees, and errors."""
     docstrings: dict[str, str] = {}
     module_symbols: dict[str, dict[str, str]] = {}
     parsed: dict[str, ast.Module] = {}
@@ -203,9 +214,7 @@ def _build_reexport_map(parsed, modules):
             if not isinstance(node, ast.ImportFrom):
                 continue
             if node.level:
-                base = _resolve_relative_import(
-                    mod, node.level, node.module, modules
-                )
+                base = _resolve_relative_import(mod, node.level, node.module, modules)
                 if not base:
                     continue
                 pkg_target = _find_target(base, modules) if node.module else None
@@ -264,7 +273,11 @@ def _collect_imports(parsed, modules, module_symbols):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     target = _find_target(alias.name, modules)
-                    if target and target != mod and not _is_containment_edge(mod, target):
+                    if (
+                        target
+                        and target != mod
+                        and not _is_containment_edge(mod, target)
+                    ):
                         edge_names.setdefault((mod, target), {})
             elif isinstance(node, ast.ImportFrom):
                 if node.level:
@@ -281,8 +294,15 @@ def _collect_imports(parsed, modules, module_symbols):
                                 if alias.name == "*":
                                     continue
                                 sym = target_syms.get(alias.name, SYM_VAR)
-                                _add_edge(edge_names, mod, target, alias.name,
-                                          sym, reexport_map, module_symbols)
+                                _add_edge(
+                                    edge_names,
+                                    mod,
+                                    target,
+                                    alias.name,
+                                    sym,
+                                    reexport_map,
+                                    module_symbols,
+                                )
                     else:
                         # from . import x, y  -> each alias may be a submodule
                         for alias in node.names:
@@ -292,10 +312,14 @@ def _collect_imports(parsed, modules, module_symbols):
                                 f"{base}.{alias.name}" if base else alias.name,
                                 modules,
                             )
-                            if sub_target and sub_target != mod and not _is_containment_edge(mod, sub_target):
-                                edge_names.setdefault(
-                                    (mod, sub_target), {}
-                                )[alias.name] = SYM_VAR
+                            if (
+                                sub_target
+                                and sub_target != mod
+                                and not _is_containment_edge(mod, sub_target)
+                            ):
+                                edge_names.setdefault((mod, sub_target), {})[
+                                    alias.name
+                                ] = SYM_VAR
                 elif node.module:
                     target = _find_target(node.module, modules)
                     if target and target != mod:
@@ -304,24 +328,29 @@ def _collect_imports(parsed, modules, module_symbols):
                             if alias.name == "*":
                                 continue
                             sym = target_syms.get(alias.name, SYM_VAR)
-                            _add_edge(edge_names, mod, target, alias.name,
-                                      sym, reexport_map, module_symbols)
+                            _add_edge(
+                                edge_names,
+                                mod,
+                                target,
+                                alias.name,
+                                sym,
+                                reexport_map,
+                                module_symbols,
+                            )
 
     return edge_names
 
 
 # --- Shell script analysis ------------------------------------------------
 
-_RE_SH_FUNC = re.compile(
-    r'^\s*(?:function\s+(\w+)|(\w+)\s*\(\s*\))', re.MULTILINE
-)
-_DATA_EXT = r'(?:ya?ml|json)'
+_RE_SH_FUNC = re.compile(r"^\s*(?:function\s+(\w+)|(\w+)\s*\(\s*\))", re.MULTILINE)
+_DATA_EXT = r"(?:ya?ml|json)"
 _RE_SH_REFS = [
-    re.compile(r'(?:python[\d.]*)\s+(?:-\w+\s+)*([\w./_-]+\.py)'),
-    re.compile(r'(?:bash|sh|zsh)\s+(?:-\w+\s+)*([\w./_-]+\.(?:sh|bash))'),
-    re.compile(r'(?:source|\.)\s+([\w./_-]+\.(?:sh|bash))'),
-    re.compile(r'\./?([\w./_-]+\.(?:sh|bash|py))'),
-    re.compile(r'([\w./_-]+\.' + _DATA_EXT + r')'),
+    re.compile(r"(?:python[\d.]*)\s+(?:-\w+\s+)*([\w./_-]+\.py)"),
+    re.compile(r"(?:bash|sh|zsh)\s+(?:-\w+\s+)*([\w./_-]+\.(?:sh|bash))"),
+    re.compile(r"(?:source|\.)\s+([\w./_-]+\.(?:sh|bash))"),
+    re.compile(r"\./?([\w./_-]+\.(?:sh|bash|py))"),
+    re.compile(r"([\w./_-]+\." + _DATA_EXT + r")"),
 ]
 
 
@@ -395,7 +424,7 @@ def _resolve_shell_refs(shell_refs, module_rel):
     return edge_names
 
 
-_RE_FILE_REF = re.compile(r'([\w./_-]+\.(?:ya?ml|json|sh))')
+_RE_FILE_REF = re.compile(r"([\w./_-]+\.(?:ya?ml|json|sh))")
 
 
 def _collect_file_refs(parsed: dict[str, ast.Module], module_rel: dict[str, str]):
@@ -446,29 +475,49 @@ def _find_parent(node_id: str, all_containers: set[str]) -> str:
     return ""
 
 
-def _build_elements(all_nodes, folder_ids, all_containers, edge_names,
-                    importers, imported, docstrings, module_symbols, module_rel,
-                    parse_errors=None):
+def _build_elements(
+    all_nodes,
+    folder_ids,
+    all_containers,
+    edge_names,
+    importers,
+    imported,
+    docstrings,
+    module_symbols,
+    module_rel,
+    parse_errors=None,
+):
     """Assemble the Cytoscape elements list (nodes + edges)."""
     parse_errors = parse_errors or {}
     elements = []
 
     # Folder (synthetic compound) nodes — emitted first so children can reference them
     for folder in sorted(folder_ids):
-        elements.append({"data": {
-            "id": folder,
-            "label": folder.split(".")[-1],
-            "is_folder": True,
-            "parent": _find_parent(folder, all_containers),
-            "docstring": "", "color": "", "textColor": "",
-            "type": "folder", "group": "", "filepath": "", "symbols": "",
-        }})
+        elements.append(
+            {
+                "data": {
+                    "id": folder,
+                    "label": folder.split(".")[-1],
+                    "is_folder": True,
+                    "parent": _find_parent(folder, all_containers),
+                    "docstring": "",
+                    "color": "",
+                    "textColor": "",
+                    "type": "folder",
+                    "group": "",
+                    "filepath": "",
+                    "symbols": "",
+                }
+            }
+        )
 
     # Module nodes
     for node in all_nodes:
         rel = module_rel.get(node, "")
         raw_name = Path(rel).name if rel else node.split(".")[-1]
-        filename = node.split(".")[-1] + ".py" if raw_name == "__init__.py" else raw_name
+        filename = (
+            node.split(".")[-1] + ".py" if raw_name == "__init__.py" else raw_name
+        )
         if node in parse_errors:
             bg, fg = NODE_COLORS["error"]
             label = "\u26a0 " + filename
@@ -485,29 +534,37 @@ def _build_elements(all_nodes, folder_ids, all_containers, edge_names,
                 for name, sym in sorted(module_symbols.get(node, {}).items())
                 if sym in (SYM_FUNC, SYM_CLASS)
             )
-        elements.append({"data": {
-            "id": node,
-            "label": label,
-            "docstring": docstring,
-            "color": bg,
-            "textColor": fg,
-            "type": ntype,
-            "group": node.split(".")[0] if "." in node else "",
-            "filepath": module_rel.get(node, ""),
-            "parent": _find_parent(node, all_containers),
-            "symbols": symbols,
-        }})
+        elements.append(
+            {
+                "data": {
+                    "id": node,
+                    "label": label,
+                    "docstring": docstring,
+                    "color": bg,
+                    "textColor": fg,
+                    "type": ntype,
+                    "group": node.split(".")[0] if "." in node else "",
+                    "filepath": module_rel.get(node, ""),
+                    "parent": _find_parent(node, all_containers),
+                    "symbols": symbols,
+                }
+            }
+        )
 
     # Edges — arrow points FROM dependency TO importer
     for src, tgt in sorted(edge_names.keys()):
         name_syms = edge_names[(src, tgt)]
         label = "\n".join(f"{sym} {name}" for name, sym in sorted(name_syms.items()))
-        elements.append({"data": {
-            "id": f"{src}->{tgt}",
-            "source": tgt,
-            "target": src,
-            "label": label,
-        }})
+        elements.append(
+            {
+                "data": {
+                    "id": f"{src}->{tgt}",
+                    "source": tgt,
+                    "target": src,
+                    "label": label,
+                }
+            }
+        )
 
     return elements
 
@@ -529,8 +586,9 @@ def generate_graph_json(project_dir: Path, ignore_file: Path | None) -> list[dic
     data_modules: dict[str, Path] = {}
     data_rel: dict[str, str] = {}
     for ext in (".yaml", ".yml", ".json"):
-        dm, dr = _build_module_index(project_dir,
-            [f for f in data_files if f.endswith(ext)], ext, keep_ext=True)
+        dm, dr = _build_module_index(
+            project_dir, [f for f in data_files if f.endswith(ext)], ext, keep_ext=True
+        )
         data_modules.update(dm)
         data_rel.update(dr)
 
@@ -574,13 +632,22 @@ def generate_graph_json(project_dir: Path, ignore_file: Path | None) -> list[dic
     all_containers = all_nodes_set | folder_ids
 
     return _build_elements(
-        all_nodes, folder_ids, all_containers, edge_names,
-        importers, imported, docstrings, module_symbols, module_rel,
+        all_nodes,
+        folder_ids,
+        all_containers,
+        edge_names,
+        importers,
+        imported,
+        docstrings,
+        module_symbols,
+        module_rel,
         parse_errors,
     )
 
 
-def generate_graph(project_dir: Path, ignore_file: Path | None, output_path: Path) -> None:
+def generate_graph(
+    project_dir: Path, ignore_file: Path | None, output_path: Path
+) -> None:
     """Parse project files and write Cytoscape elements JSON to output_path."""
     elements = generate_graph_json(project_dir, ignore_file)
     tmp = output_path.with_suffix(".tmp")

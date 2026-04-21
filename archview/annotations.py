@@ -21,6 +21,5 @@ def handle_annotations_post(handler):
     data = handler._read_json_body()
     if data is None:
         return
-    (handler.data_dir / "annotations.json").write_text(
-        json.dumps(data, indent=2))
+    (handler.data_dir / "annotations.json").write_text(json.dumps(data, indent=2))
     handler._json_response({"ok": True})
