@@ -243,7 +243,6 @@ def _resolve_reexport(target: str, name: str, reexport_map) -> str:
         if not nxt or nxt == target:
             return target
         target = nxt
-    return target
 
 
 def _add_edge(edge_names, mod, target, name, sym, reexport_map, module_symbols):

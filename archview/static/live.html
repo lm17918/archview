@@ -568,6 +568,14 @@ const cy = cytoscape({
         'opacity': 0.3,
       }
     },
+    {
+      selector: 'edge.diff-modified',
+      style: {
+        'line-color': '#facc15',
+        'target-arrow-color': '#facc15',
+        'width': 2.5,
+      }
+    },
   ],
   layout: { name: 'preset' },
   wheelSensitivity: 0.3,
@@ -669,8 +677,7 @@ function isCollapsible(node) {
 }
 
 function updateFolderLabels() {
-  // Triangles are now handled by CSS style functions (:parent and .collapsed)
-  // Force a style recalculation so labels update immediately
+  // Force a style recalc so label style functions (:parent / .collapsed) re-evaluate
   cy.nodes().filter(n => isCollapsible(n)).forEach(n => n.style());
 }
 
@@ -723,6 +730,11 @@ function toggleFolder(id) {
 const selectedNodes = new Set();
 
 function applyFocus() {
+  // Prune stale/hidden IDs left over from graph refresh or folder collapse
+  selectedNodes.forEach(id => {
+    const n = cy.getElementById(id);
+    if (!n.length || !n.visible()) selectedNodes.delete(id);
+  });
   if (selectedNodes.size === 0) {
     cy.elements().removeClass('faded highlighted');
     if (hoveredNode) renderNodeTooltip(hoveredNode);
@@ -754,6 +766,10 @@ function applyFocus() {
 cy.on('tap', 'node', evt => {
   const node = evt.target;
   if (isCollapsible(node)) {
+    if (selectedNodes.size > 0) {
+      selectedNodes.clear();
+      cy.elements().removeClass('faded highlighted');
+    }
     toggleFolder(node.id());
     return;
   }
@@ -767,6 +783,7 @@ cy.on('tap', evt => {
   if (evt.target === cy) {
     selectedNodes.clear();
     cy.elements().removeClass('faded highlighted');
+    if (hoveredNode) renderNodeTooltip(hoveredNode);
   }
 });
 
@@ -897,10 +914,18 @@ function indexElements(elements) {
 function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
   // Remove stale nodes and edges
   cy.nodes().forEach(n => {
-    if (!nodeIds.has(n.id())) {
-      delete userPositions[n.id()];
-      savedParents.delete(n.id());
-      savedPositions.delete(n.id());
+    const id = n.id();
+    if (!nodeIds.has(id)) {
+      delete userPositions[id];
+      savedParents.delete(id);
+      savedPositions.delete(id);
+      expandedFolders.delete(id);
+      collapsePositions.delete(id);
+      selectedNodes.delete(id);
+      if (hoveredNode && hoveredNode.id() === id) {
+        hoveredNode = null;
+        hideTooltip();
+      }
       n.remove();
     }
   });
@@ -998,8 +1023,8 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       body: JSON.stringify(allPositions),
     });
     if (resp.ok) {
-      const result = await resp.json();
-      setStatus('Saved · ' + (result.drawio || ''));
+      await resp.json();
+      setStatus('Saved');
       Object.assign(userPositions, allPositions);
     } else {
       setStatus('Save failed: ' + resp.status, false);
@@ -1026,7 +1051,7 @@ document.getElementById('btn-png').addEventListener('click', () => {
 });
 
 refresh();
-const refreshTimer = setInterval(refresh, REFRESH_MS);
+setInterval(refresh, REFRESH_MS);
 
 // ── Diff view ──────────────────────────────────────────────────────────
 const diffSelect = document.getElementById('diff-ref');
@@ -1073,7 +1098,6 @@ async function loadRefs() {
     }
   } catch(e) {}
 }
-// loadRefs is called from feature check below
 
 function clearDiff() {
   diffState = null;
@@ -1115,6 +1139,10 @@ function applyDiff(diff) {
     const el = cy.getElementById(id);
     if (el.length) el.addClass('diff-removed');
   });
+  (diff.modified_edges || []).forEach(id => {
+    const el = cy.getElementById(id);
+    if (el.length) el.addClass('diff-modified');
+  });
 
   // Run layout to place ghost nodes
   runLayout(true, new Set(diff.removed_nodes));
@@ -1122,7 +1150,8 @@ function applyDiff(diff) {
   const parts = [];
   if (diff.added_nodes.length) parts.push(`<span class="diff-badge diff-badge-add">+${diff.added_nodes.length}</span>`);
   if (diff.removed_nodes.length) parts.push(`<span class="diff-badge diff-badge-del">-${diff.removed_nodes.length}</span>`);
-  if (diff.modified_nodes.length) parts.push(`<span class="diff-badge diff-badge-mod">~${diff.modified_nodes.length}</span>`);
+  const modCount = diff.modified_nodes.length + (diff.modified_edges || []).length;
+  if (modCount) parts.push(`<span class="diff-badge diff-badge-mod">~${modCount}</span>`);
   statusEl.innerHTML = parts.length ? `Diff vs ${diff.ref} ` + parts.join(' ') : `Diff vs ${diff.ref} — no changes`;
 }
 
@@ -1327,7 +1356,7 @@ annoLayer.addEventListener('wheel', e => {
   syncViewport();
 }, { passive: false });
 
-loadRefs();
+// Diff UI intentionally disabled — #diff-controls stays hidden until design is finalized
 loadAnnotations();
 setTimeout(syncViewport, 200);
 });

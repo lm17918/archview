@@ -97,30 +97,20 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
             return
         filepath = body.get("file", "")
         if filepath:
+            # resolve(strict=True) follows symlinks and raises on missing files,
+            # so the subsequent relative_to check covers both traversal and
+            # symlink-escape attempts in one step.
             try:
-                abs_path = (self.project_dir / filepath).resolve(
-                    strict=True)
-                abs_path.relative_to(
-                    self.project_dir.resolve(strict=True))
+                abs_path = (self.project_dir / filepath).resolve(strict=True)
+                abs_path.relative_to(self.project_dir.resolve(strict=True))
             except (ValueError, OSError):
                 self._json_response(
                     {"ok": False, "error": "path outside project"}, 403)
                 return
-            if abs_path.is_symlink():
-                try:
-                    real = abs_path.resolve(strict=True)
-                    real.relative_to(
-                        self.project_dir.resolve(strict=True))
-                except (ValueError, OSError):
-                    self._json_response(
-                        {"ok": False,
-                         "error": "symlink target outside project"}, 403)
-                    return
-            if abs_path.exists():
-                try:
-                    subprocess.Popen(["code", "--goto", str(abs_path)])
-                except FileNotFoundError:
-                    pass
+            try:
+                subprocess.Popen(["code", "--goto", str(abs_path)])
+            except FileNotFoundError:
+                pass
         self._json_response({"ok": True})
 
     def _handle_save(self):

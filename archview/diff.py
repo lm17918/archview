@@ -142,6 +142,12 @@ def _compute_diff(current: list[dict], old: list[dict], ref: str) -> dict:
            _element_fingerprint(old_nodes[nid]):
             modified_nodes.append(nid)
 
+    modified_edges = []
+    for eid in sorted(set(cur_edges) & set(old_edges)):
+        if _element_fingerprint(cur_edges[eid]) != \
+           _element_fingerprint(old_edges[eid]):
+            modified_edges.append(eid)
+
     removed_elements = []
     for nid in removed_nodes:
         el = old_nodes[nid]
@@ -157,5 +163,6 @@ def _compute_diff(current: list[dict], old: list[dict], ref: str) -> dict:
         "modified_nodes": modified_nodes,
         "added_edges": added_edges,
         "removed_edges": removed_edges,
+        "modified_edges": modified_edges,
         "removed_elements": removed_elements,
     }
