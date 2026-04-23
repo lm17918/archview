@@ -278,6 +278,25 @@
     text-shadow: 0 1px 6px rgba(0,0,0,0.9);
   }
   .anno-preview { opacity: 0.5; }
+  .anno-input {
+    position: absolute;
+    pointer-events: all;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    outline: none;
+    min-width: 80px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .anno-input-text {
+    font-size: 16px;
+    font-weight: 600;
+  }
   #anno-viewport.eraser-active .annotation {
     pointer-events: all;
     cursor: pointer;
@@ -1317,6 +1336,33 @@ annoLayer.addEventListener('mousemove', e => {
   boxPreview.style.height = Math.abs(pos.y - drawState.startY) + 'px';
 });
 
+function promptInline({ x, y, placeholder, extraClass, onCommit, onCancel }) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = placeholder;
+  input.className = 'anno-input' + (extraClass ? ' ' + extraClass : '');
+  input.style.left = x + 'px';
+  input.style.top = y + 'px';
+  annoViewport.appendChild(input);
+  requestAnimationFrame(() => input.focus());
+
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    const value = input.value.trim();
+    input.remove();
+    if (commit && value) onCommit(value);
+    else if (!commit && onCancel) onCancel();
+  };
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+    ev.stopPropagation();
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
 annoLayer.addEventListener('mouseup', e => {
   if (activeTool !== 'box' || !drawState) return;
   const pos = screenToModel(e.clientX, e.clientY);
@@ -1327,21 +1373,31 @@ annoLayer.addEventListener('mouseup', e => {
   if (boxPreview) { boxPreview.remove(); boxPreview = null; }
   drawState = null;
   if (w < 20 || h < 20) return;
-  const label = prompt('Label (or leave empty):') || '';
-  annotations.push({ id: 'ann_' + Date.now(), type: 'box', x, y, w, h, label, color: '#8b7cf8' });
+  const id = 'ann_' + Date.now();
+  annotations.push({ id, type: 'box', x, y, w, h, label: '', color: '#8b7cf8' });
   renderAnnotations();
-  saveAnnotations();
+  promptInline({
+    x: x + 10, y: y - 13, placeholder: 'Label (optional)',
+    onCommit: (value) => {
+      const ann = annotations.find(a => a.id === id);
+      if (ann) { ann.label = value; renderAnnotations(); saveAnnotations(); }
+    },
+    onCancel: () => { saveAnnotations(); },
+  });
 });
 
 // Text placement
 annoLayer.addEventListener('click', e => {
   if (activeTool !== 'text') return;
   const pos = screenToModel(e.clientX, e.clientY);
-  const text = prompt('Text:');
-  if (!text) return;
-  annotations.push({ id: 'ann_' + Date.now(), type: 'text', x: pos.x, y: pos.y, text, color: '#ffffff', fontSize: 16 });
-  renderAnnotations();
-  saveAnnotations();
+  promptInline({
+    x: pos.x, y: pos.y - 10, placeholder: 'Type text…', extraClass: 'anno-input-text',
+    onCommit: (text) => {
+      annotations.push({ id: 'ann_' + Date.now(), type: 'text', x: pos.x, y: pos.y, text, color: '#ffffff', fontSize: 16 });
+      renderAnnotations();
+      saveAnnotations();
+    },
+  });
 });
 
 // Zoom pass-through while in annotation mode
