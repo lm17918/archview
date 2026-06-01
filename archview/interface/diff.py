@@ -1,4 +1,4 @@
-"""Diff view: compare current graph against a git ref."""
+"""Diff view: compare the current graph against a git ref."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from archview.graph import generate_graph_json
+from archview.analysis import generate_graph_json
 
 _diff_lock = threading.Lock()
 
@@ -38,65 +38,39 @@ def handle_diff(handler):
         _diff_lock.release()
 
 
+def _git_lines(project_dir: Path, args: list[str]) -> list[str]:
+    try:
+        out = subprocess.run(
+            ["git", *args],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return []
+    return [line for line in out.stdout.strip().splitlines() if line.strip()]
+
+
 def _list_refs(project_dir: Path) -> dict:
     project_dir = Path(project_dir)
-    result: dict[str, list] = {"commits": [], "branches": [], "tags": []}
+    commits = []
+    for line in _git_lines(project_dir, ["log", "--oneline", "-20"]):
+        parts = line.split(None, 1)
+        msg = parts[1] if len(parts) > 1 else ""
+        commits.append({"hash": parts[0], "message": msg})
 
-    try:
-        log = subprocess.run(
-            ["git", "log", "--oneline", "-20"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        for line in log.stdout.strip().splitlines():
-            if not line:
-                continue
-            parts = line.split(None, 1)
-            result["commits"].append(
-                {
-                    "hash": parts[0],
-                    "message": parts[1] if len(parts) > 1 else "",
-                }
-            )
-    except subprocess.CalledProcessError:
-        pass
-
-    try:
-        branches = subprocess.run(
-            ["git", "branch", "--format=%(refname:short)"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        result["branches"] = [
-            b.strip() for b in branches.stdout.strip().splitlines() if b.strip()
-        ]
-    except subprocess.CalledProcessError:
-        pass
-
-    try:
-        tags = subprocess.run(
-            ["git", "tag"],
-            cwd=project_dir,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        result["tags"] = [
-            t.strip() for t in tags.stdout.strip().splitlines() if t.strip()
-        ]
-    except subprocess.CalledProcessError:
-        pass
-
-    return result
+    return {
+        "commits": commits,
+        "branches": _git_lines(project_dir, ["branch", "--format=%(refname:short)"]),
+        "tags": _git_lines(project_dir, ["tag"]),
+    }
 
 
 def _generate_old_graph(
     project_dir: Path, ref: str, ignore_file: Path | None
 ) -> list[dict]:
+    # Materialize the ref in a throwaway worktree, graph it, then clean up
     project_dir = Path(project_dir)
     subprocess.run(
         ["git", "rev-parse", "--verify", ref],
@@ -129,7 +103,7 @@ def _element_fingerprint(el: dict) -> str:
     d = el["data"]
     if "source" in d:
         return f"{d.get('source')}|{d.get('target')}|{d.get('label', '')}"
-    return f"{d.get('type', '')}|{d.get('symbols', '')}" f"|{d.get('docstring', '')}"
+    return f"{d.get('type', '')}|{d.get('symbols', '')}|{d.get('docstring', '')}"
 
 
 def _compute_diff(current: list[dict], old: list[dict], ref: str) -> dict:

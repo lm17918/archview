@@ -2,7 +2,7 @@
 
 Mini object-detection projects used to test archview features.
 
-Run `archview <folder>` inside any of them and check the graph.
+Run `archview <folder>` pointing at the example folder itself (its import root) and check the graph. These use absolute imports like `from a import x`, so scanning a parent directory leaves them unconnected — the modules appear without arrows.
 
 | Folder | What it exercises |
 |--------|-------------------|

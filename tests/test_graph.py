@@ -1,6 +1,7 @@
 """Tests for archview graph generation and server."""
 
 import json
+import subprocess
 import threading
 import time
 import urllib.request
@@ -8,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from archview.graph import collect_py_files, generate_graph
-from archview.server import make_server
+from archview.analysis import collect_py_files, generate_graph
+from archview.interface import make_server
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -101,22 +102,46 @@ def test_no_ignore_file(proj, tmp_path):
     assert len(files) == 4
 
 
-# ---------------------------------------------------------------------------
-# Node types and colors
-# ---------------------------------------------------------------------------
+def test_tracked_but_deleted_file_excluded(tmp_path):
+    """A file in git's index but removed from disk must not appear (subdir-safe)."""
+    git = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)
+    git("init")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (tmp_path / "live.py").write_text("")
+    (tmp_path / "gone.py").write_text("")
+    git("add", "live.py", "gone.py")
+    git("commit", "-m", "init")
+    (tmp_path / "gone.py").unlink()
+    files = collect_py_files(tmp_path, None)
+    assert any(f.endswith("live.py") for f in files)
+    assert not any(f.endswith("gone.py") for f in files)
 
-COLORS = {
-    "entry": "#6ee7b7",
-    "intermediate": "#93c5fd",
-    "leaf": "#fca5a5",
-    "isolated": "#3a3a46",
-}
-TEXT_COLORS = {
-    "entry": "#0a2a1a",
-    "intermediate": "#0a1a2e",
-    "leaf": "#2e0a0a",
-    "isolated": "#e2e2e8",
-}
+
+def test_trailing_slash_matches_dir_only(proj, tmp_path):
+    """'build/' ignores the build/ dir but keeps a file named build.py."""
+    (proj / "build.py").write_text('"""Keep me."""\n')
+    (proj / "build").mkdir()
+    (proj / "build" / "out.py").write_text("")
+    ignore = proj / ".archviewignore"
+    ignore.write_text("build/\n")
+    files = collect_py_files(proj, ignore)
+    assert any(f.endswith("build.py") for f in files)
+    assert not any("build/out.py" in f for f in files)
+
+
+def test_bare_pattern_still_matches_stem(proj, tmp_path):
+    """Without a slash, 'build' still matches build.py (existing behavior)."""
+    (proj / "build.py").write_text("")
+    ignore = proj / ".archviewignore"
+    ignore.write_text("build\n")
+    files = collect_py_files(proj, ignore)
+    assert not any(f.endswith("build.py") for f in files)
+
+
+# ---------------------------------------------------------------------------
+# Node types (colors are a frontend concern — mapped from type in live.html)
+# ---------------------------------------------------------------------------
 
 
 def test_entry_node_type(proj, tmp_path):
@@ -142,25 +167,6 @@ def test_isolated_node_type(proj, tmp_path):
     (proj / "standalone.py").write_text('"""Standalone."""\n')
     nodes, _ = run(proj, tmp_path)
     assert nodes["standalone"]["type"] == "isolated"
-
-
-def test_node_colors_match_type(proj, tmp_path):
-    (proj / "standalone.py").write_text("")
-    nodes, _ = run(proj, tmp_path)
-    for node in nodes.values():
-        assert node["color"] == COLORS[node["type"]], f"{node['id']}: wrong color"
-
-
-def test_text_color_for_isolated_is_light(proj, tmp_path):
-    """Isolated nodes have dark background — text must be light."""
-    (proj / "standalone.py").write_text("")
-    nodes, _ = run(proj, tmp_path)
-    assert nodes["standalone"]["textColor"] == TEXT_COLORS["isolated"]
-
-
-def test_text_color_for_entry_is_dark(proj, tmp_path):
-    nodes, _ = run(proj, tmp_path)
-    assert nodes["main"]["textColor"] == TEXT_COLORS["entry"]
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +283,18 @@ def test_package_with_init_is_not_folder(tmp_path):
     assert not nodes["pkg"].get("is_folder")
 
 
+def test_dir_holding_only_subdirs_gets_container(tmp_path):
+    """A dir with no direct files (only subdirs) still gets a folder node,
+    so its children stay nested instead of floating to the top."""
+    (tmp_path / "examples" / "demo").mkdir(parents=True)
+    (tmp_path / "examples" / "demo" / "main.py").write_text("")
+    nodes, _ = run(tmp_path, tmp_path)
+    assert nodes["examples"]["is_folder"] is True
+    assert nodes["examples"]["parent"] == ""
+    assert nodes["examples.demo"]["parent"] == "examples"
+    assert nodes["examples.demo.main"]["parent"] == "examples.demo"
+
+
 # ---------------------------------------------------------------------------
 # Edge labels carry imported symbols
 # ---------------------------------------------------------------------------
@@ -329,7 +347,7 @@ def test_analysis_completes_quickly(tmp_path):
 
 @pytest.fixture
 def server(tmp_path):
-    static_dir = Path(__file__).parent.parent / "archview" / "static"
+    static_dir = Path(__file__).parent.parent / "archview" / "interface" / "static"
     data_dir = tmp_path / ".archview"
     data_dir.mkdir()
     (data_dir / "graph.json").write_text(

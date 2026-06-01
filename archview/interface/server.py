@@ -1,3 +1,5 @@
+"""HTTP server: serves the frontend and handles open/save/diff/annotation calls."""
+
 from __future__ import annotations
 
 import http.server
@@ -5,7 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from archview import annotations, diff
+from archview.interface import annotations, diff
 
 
 class ArchviewHandler(http.server.BaseHTTPRequestHandler):

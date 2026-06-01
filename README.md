@@ -2,7 +2,7 @@
 
 **See your codebase. Understand it. Then change it.**
 
-ArchView gives you a live, interactive map of any Python project's architecture — right in your browser. It parses real Python (via AST, not regex), watches for changes, and updates the graph in real time.
+ArchView gives you a live, interactive map of any Python project's architecture — right in your browser. It parses real Python (via AST, not regex) and follows references into shell scripts and config files, watches for changes, and updates the graph in real time.
 
 Built for developers who vibe-code and need to stay oriented, or anyone inheriting a codebase they didn't write.
 
@@ -30,12 +30,14 @@ Available on [PyPI](https://pypi.org/project/archview/). Pure Python, works anyw
 archview /path/to/your/project
 ```
 
-Open http://localhost:9090 — that's it.
+Open http://localhost:8080 — that's it. If 8080 is taken, ArchView scans the next 100 ports and prints the one it picked.
 
 ```bash
 # Custom port and refresh interval
-archview /path/to/project --port 8080 --interval 5
+archview /path/to/project --port 9000 --interval 5
 ```
+
+> **Tip:** point ArchView at your project's _import root_ — the directory your code imports relative to. An edge is only drawn when an import resolves to a file inside the scanned tree, so `from a import x` connects only if `a.py` sits at the root you scanned. Scan a parent folder and those absolute imports won't resolve (the modules show up, just without arrows).
 
 ## What you see
 
@@ -45,7 +47,7 @@ archview /path/to/project --port 8080 --interval 5
 | **Blue**         | Connector — modules that both import and are imported  |
 | **Red**          | Utility — leaf modules only imported by others         |
 | **Gray**         | Isolated — no import relationships                     |
-| **Red (bright)** | Syntax errors — files that failed to parse             |
+| **Red (bright)** | Error — files that failed to parse                     |
 
 ## Features
 
@@ -86,6 +88,8 @@ archview ignore --list
 # Remove a pattern
 archview ignore --remove tests
 ```
+
+Patterns match any path segment or a file's stem (so `tests` hides `tests/` **and** `tests.py`). Add a trailing slash to match a directory only — `build/` ignores the `build/` folder but keeps a file named `build.py`. The defaults (`build/`, `dist/`, `venv/`, `__pycache__/`, …) are all directory-anchored.
 
 ## How it works
 

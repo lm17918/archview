@@ -1,4 +1,4 @@
-"""Node annotations persistence."""
+"""Persist and serve user-drawn graph annotations."""
 
 import json
 

@@ -1,6 +1,6 @@
 [project]
 name = "archview"
-version = "0.2.5"
+version = "0.2.6"
 description = "Interactive live architecture viewer for Python projects"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -42,7 +42,7 @@ where = ["."]
 include = ["archview*"]
 
 [tool.setuptools.package-data]
-archview = ["static/*.html", "static/*.js"]
+"archview.interface" = ["static/*.html", "static/*.js"]
 
 [tool.black]
 target-version = ["py39"]
