@@ -41,9 +41,9 @@ archview /path/to/project --port 8080 --interval 5
 
 | Color            | Meaning                                                |
 | ---------------- | ------------------------------------------------------ |
-| **Green**        | Entry points — modules that import but aren't imported |
-| **Blue**         | Connectors — modules that both import and are imported |
-| **Red**          | Utilities — leaf modules only imported by others       |
+| **Green**        | Entry point — modules that import but aren't imported  |
+| **Blue**         | Connector — modules that both import and are imported  |
+| **Red**          | Utility — leaf modules only imported by others         |
 | **Gray**         | Isolated — no import relationships                     |
 | **Red (bright)** | Syntax errors — files that failed to parse             |
 
@@ -63,7 +63,11 @@ Edit your code, save — the graph updates automatically. No restart needed.
 
 ### Dependency highlighting
 
-Hover over an edge to see exactly which symbols are imported. Click a node and its entire dependency chain lights up — everything else fades.
+Click a node and it plus its direct dependencies light up — everything else fades. Then hover a highlighted edge to see exactly which symbols are imported across it.
+
+### Annotations
+
+Sketch directly on the graph to explain it. Draw boxes, add text labels, erase — useful for walking a teammate through the architecture or marking up a review. Annotations persist across launches.
 
 ### Export
 
@@ -85,8 +89,8 @@ archview ignore --remove tests
 
 ## How it works
 
-1. Collects all `.py` files (git-aware, respects `.archviewignore`)
-2. Parses each file's AST to extract imports, functions, classes
+1. Collects source files — `.py`, plus `.sh` scripts and config files (`.yaml`/`.json`) — git-aware, respects `.archviewignore`
+2. Parses Python via AST (imports, functions, classes); resolves shell-script and config references too
 3. Builds a dependency graph with classified nodes
 4. Renders it with [Cytoscape.js](https://js.cytoscape.org/) + [Dagre](https://github.com/dagrejs/dagre) layout
 5. Watches for changes and re-generates every N seconds
@@ -101,7 +105,7 @@ Try it on the example project (hosted on GitHub):
 git clone https://github.com/lm17918/archview.git archview-demo
 cd archview-demo
 pip install archview
-archview example_project
+archview examples
 ```
 
 ## License

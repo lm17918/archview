@@ -340,8 +340,8 @@
   <div id="brand">arch<span>view</span></div>
 
   <div id="legend">
-    <div class="legend-item"><span class="legend-dot" style="background:#6ee7b7"></span>Top-level</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>Intermediate</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#6ee7b7"></span>Entry Point</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#93c5fd"></span>Connector</div>
     <div class="legend-item"><span class="legend-dot" style="background:#fca5a5"></span>Utility</div>
     <div class="legend-item"><span class="legend-dot" style="background:#3a3a46"></span>Isolated</div>
     <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span>Error</div>
@@ -881,7 +881,7 @@ function renderNodeTooltip(node) {
   const focused = node.hasClass('highlighted');
   tooltip.querySelector('.tt-name').textContent = d.label;
   tooltip.querySelector('.tt-doc').textContent = d.docstring || '(no docstring)';
-  const labels = { entry: 'Top-level', leaf: 'Utility', intermediate: 'Intermediate', isolated: 'Isolated' };
+  const labels = { entry: 'Entry Point', leaf: 'Utility', intermediate: 'Connector', isolated: 'Isolated' };
   tooltip.querySelector('.tt-type').textContent = labels[d.type] || d.type;
   const symsEl = tooltip.querySelector('.tt-symbols');
   if (focused && d.symbols) {
