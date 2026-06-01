@@ -358,6 +358,7 @@
     <span id="status">Loading…</span>
     <button id="btn-fit">Fit</button>
     <button id="btn-layout">Reset layout</button>
+    <button id="btn-folders">Collapse all</button>
     <button id="btn-png">PNG</button>
     <button id="btn-save" class="primary">Save</button>
   </div>
@@ -601,7 +602,10 @@ const cy = cytoscape({
 });
 
 cy.on('dragfree', 'node', evt => {
-  userPositions[evt.target.id()] = { ...evt.target.position() };
+  const id = evt.target.id();
+  // expanded compounds have positions derived from children — don't persist
+  if (compoundNodes.has(id) && expandedFolders.has(id)) return;
+  userPositions[id] = { ...evt.target.position() };
 });
 
 // ── Folder collapse / expand ──────────────────────────────────────────────
@@ -731,6 +735,8 @@ function toggleFolder(id) {
             userPositions[childId].x += dx;
             userPositions[childId].y += dy;
           }
+          const sp = savedPositions.get(childId);
+          if (sp) { sp.x += dx; sp.y += dy; }
         }
       }
       collapsePositions.delete(id);
@@ -741,8 +747,70 @@ function toggleFolder(id) {
   }
   updateFolderLabels();
   applyCollapse();
+  if (expandedFolders.has(id)) applyGridInsideFolders(id);
   cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
   applyFocus();
+  updateFolderButtonLabel();
+}
+
+function updateFolderButtonLabel() {
+  const btn = document.getElementById('btn-folders');
+  if (!btn) return;
+  if (compoundNodes.size === 0) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  const anyExpanded = [...compoundNodes].some(id => expandedFolders.has(id));
+  btn.textContent = anyExpanded ? 'Collapse all' : 'Expand all';
+}
+
+function applyGridInsideFolders(targetId = null) {
+  const STEP_X = 170;
+  const STEP_Y = 60;
+  let ids;
+  if (targetId) {
+    // include target plus any expanded compound descendants
+    ids = [targetId];
+    const stack = [targetId];
+    while (stack.length) {
+      const cur = stack.pop();
+      const node = cy.getElementById(cur);
+      if (!node.length) continue;
+      node.children().forEach(child => {
+        const cid = child.id();
+        if (compoundNodes.has(cid) && expandedFolders.has(cid)) {
+          ids.push(cid);
+          stack.push(cid);
+        }
+      });
+    }
+  } else {
+    ids = [...compoundNodes];
+  }
+  ids.forEach(folderId => {
+    if (!expandedFolders.has(folderId)) return;
+    const folder = cy.getElementById(folderId);
+    if (!folder.length) return;
+    const children = folder.children().filter(n => n.visible());
+    const count = children.length;
+    if (count <= 1) return;
+    if (children.some(c => userPositions[c.id()])) return;
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    let sumX = 0, sumY = 0;
+    children.forEach(c => { sumX += c.position().x; sumY += c.position().y; });
+    const cx = sumX / count;
+    const cy_ = sumY / count;
+    children.forEach((child, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      child.position({
+        x: cx + (col - (cols - 1) / 2) * STEP_X,
+        y: cy_ + (row - (rows - 1) / 2) * STEP_Y,
+      });
+    });
+  });
 }
 
 // ── Node focus ───────────────────────────────────────────────────────────
@@ -897,9 +965,9 @@ function runLayout(fit, newNodeIds = new Set()) {
   cy.layout({
     name: 'dagre',
     rankDir: 'LR',
-    nodeSep: 20,
-    rankSep: 80,
-    edgeSep: 10,
+    nodeSep: 10,
+    rankSep: 50,
+    edgeSep: 8,
     compound: true,
     animate: !firstLoad,
     animationDuration: 400,
@@ -912,6 +980,7 @@ function runLayout(fit, newNodeIds = new Set()) {
     }
   }).run();
   applyCollapse();
+  applyGridInsideFolders();
   applyFocus();
 }
 
@@ -979,6 +1048,7 @@ function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
 function trackCompoundNodes(elements) {
   compoundNodes.clear();
   for (const el of elements) {
+    if (el.data.source) continue; // edges
     if (el.data.parent) compoundNodes.add(el.data.parent);
     if (el.data.is_folder) compoundNodes.add(el.data.id);
   }
@@ -1019,6 +1089,7 @@ async function refresh() {
       runLayout(firstLoad, new Set(addedNodes));
       if (firstLoad) updateFolderLabels();
       firstLoad = false;
+      updateFolderButtonLabel();
     } else {
       applyCollapse();
       applyFocus();
@@ -1054,6 +1125,50 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 document.getElementById('btn-layout').addEventListener('click', () => {
   Object.keys(userPositions).forEach(k => delete userPositions[k]);
   runLayout(true, new Set(cy.nodes().map(n => n.id())));
+});
+
+document.getElementById('btn-folders').addEventListener('click', () => {
+  const anyExpanded = [...compoundNodes].some(id => expandedFolders.has(id));
+  if (anyExpanded) {
+    compoundNodes.forEach(id => {
+      if (expandedFolders.has(id)) {
+        const node = cy.getElementById(id);
+        if (node.length) collapsePositions.set(id, { ...node.position() });
+        expandedFolders.delete(id);
+      }
+    });
+  } else {
+    compoundNodes.forEach(id => {
+      if (!expandedFolders.has(id)) {
+        const savedPos = collapsePositions.get(id);
+        const node = cy.getElementById(id);
+        if (node.length && savedPos) {
+          const cur = node.position();
+          const dx = cur.x - savedPos.x;
+          const dy = cur.y - savedPos.y;
+          if (dx !== 0 || dy !== 0) {
+            for (const childId of getDescendants(id)) {
+              if (userPositions[childId]) {
+                userPositions[childId].x += dx;
+                userPositions[childId].y += dy;
+              }
+              const sp = savedPositions.get(childId);
+              if (sp) { sp.x += dx; sp.y += dy; }
+            }
+          }
+          collapsePositions.delete(id);
+        }
+        delete userPositions[id];
+        expandedFolders.add(id);
+      }
+    });
+  }
+  updateFolderLabels();
+  applyCollapse();
+  applyGridInsideFolders();
+  cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
+  applyFocus();
+  updateFolderButtonLabel();
 });
 
 document.getElementById('btn-fit').addEventListener('click', () => cy.fit(48));

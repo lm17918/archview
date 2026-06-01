@@ -144,6 +144,8 @@ def _build_module_index(
             mod = rel.replace("/", ".").removesuffix(ext)
         if mod.endswith(".__init__"):
             mod = mod[:-9]
+        if not mod:
+            continue
         modules[mod] = full
         module_rel[mod] = rel
     return modules, module_rel
@@ -158,7 +160,7 @@ def _parse_modules(modules: dict[str, Path]):
 
     for mod, path in modules.items():
         try:
-            tree = ast.parse(path.read_text())
+            tree = ast.parse(path.read_text(), filename=str(path))
             parsed[mod] = tree
         except SyntaxError as e:
             parse_errors[mod] = f"SyntaxError: {e.msg} (line {e.lineno})"
@@ -515,9 +517,7 @@ def _build_elements(
     for node in all_nodes:
         rel = module_rel.get(node, "")
         raw_name = Path(rel).name if rel else node.split(".")[-1]
-        filename = (
-            node.split(".")[-1] + ".py" if raw_name == "__init__.py" else raw_name
-        )
+        filename = node.split(".")[-1] if raw_name == "__init__.py" else raw_name
         if node in parse_errors:
             bg, fg = NODE_COLORS["error"]
             label = "\u26a0 " + filename
@@ -626,7 +626,9 @@ def generate_graph_json(project_dir: Path, ignore_file: Path | None) -> list[dic
         parts = node.split(".")
         if len(parts) > 1:
             candidate = ".".join(parts[:-1])
-            if candidate not in all_nodes_set:
+            # leading-dot hidden files (e.g. .eslintrc.json) produce an empty
+            # candidate; skip to avoid emitting an element with id ""
+            if candidate and candidate not in all_nodes_set:
                 folder_ids.add(candidate)
 
     all_containers = all_nodes_set | folder_ids
