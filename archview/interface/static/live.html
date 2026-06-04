@@ -512,7 +512,7 @@ const cy = cytoscape({
         'border-width': 1.5,
         'border-color': '#3a3a55',
         'border-style': 'solid',
-        'padding': '28px',
+        'padding': '40px',
         'padding-top': '10px',
         'shape': 'roundrectangle',
         'text-margin-y': 8,
@@ -619,7 +619,6 @@ const expandedFolders = new Set();
 const savedParents = new Map();    // nodeId → original parent id (when detached)
 const savedPositions = new Map();  // nodeId → {x,y} at detach time
 const compoundNodes = new Set();   // ids of nodes that are folders/compounds
-const collapsePositions = new Map(); // folderId → {x,y} at collapse time
 
 function getCollapsedAncestor(nodeId) {
   const n = cy.getElementById(nodeId);
@@ -710,56 +709,18 @@ function updateFolderLabels() {
   cy.nodes().filter(n => isCollapsible(n)).forEach(n => n.style());
 }
 
-function getDescendants(folderId) {
-  const result = [];
-  savedParents.forEach((parent, childId) => {
-    let current = parent;
-    while (current) {
-      if (current === folderId) { result.push(childId); break; }
-      current = savedParents.get(current);
-    }
-  });
-  return result;
-}
-
 function toggleFolder(id) {
-  const node = cy.getElementById(id);
-  let expandCenter = null;
   if (expandedFolders.has(id)) {
-    // Collapsing — save folder position for later delta
-    if (node.length) collapsePositions.set(id, { ...node.position() });
     expandedFolders.delete(id);
   } else {
-    // Capture the collapsed folder's position now — children get gridded around it.
-    // On first expand they have no real coords, so without this they'd land top-left.
-    if (node.length) expandCenter = { ...node.position() };
-    // Expanding — shift children by how much the folder moved
-    const savedPos = collapsePositions.get(id);
-    if (node.length && savedPos) {
-      const cur = node.position();
-      const dx = cur.x - savedPos.x;
-      const dy = cur.y - savedPos.y;
-      if (dx !== 0 || dy !== 0) {
-        for (const childId of getDescendants(id)) {
-          if (userPositions[childId]) {
-            userPositions[childId].x += dx;
-            userPositions[childId].y += dy;
-          }
-          const sp = savedPositions.get(childId);
-          if (sp) { sp.x += dx; sp.y += dy; }
-        }
-      }
-      collapsePositions.delete(id);
-    }
-    // Compound node position is derived from children — remove standalone position
+    // Compound node position is derived from children — drop any pinned position
     delete userPositions[id];
     expandedFolders.add(id);
   }
   updateFolderLabels();
-  applyCollapse();
-  if (expandedFolders.has(id)) applyGridInsideFolders(id, expandCenter);
+  // Reflow so the resized folder and its siblings don't overlap.
+  runLayout(false);
   cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
-  applyFocus();
   updateFolderButtonLabel();
 }
 
@@ -773,60 +734,6 @@ function updateFolderButtonLabel() {
   btn.style.display = '';
   const anyExpanded = [...compoundNodes].some(id => expandedFolders.has(id));
   btn.textContent = anyExpanded ? 'Collapse all' : 'Expand all';
-}
-
-function applyGridInsideFolders(targetId = null, center = null) {
-  const STEP_X = 170;
-  const STEP_Y = 60;
-  let ids;
-  if (targetId) {
-    // include target plus any expanded compound descendants
-    ids = [targetId];
-    const stack = [targetId];
-    while (stack.length) {
-      const cur = stack.pop();
-      const node = cy.getElementById(cur);
-      if (!node.length) continue;
-      node.children().forEach(child => {
-        const cid = child.id();
-        if (compoundNodes.has(cid) && expandedFolders.has(cid)) {
-          ids.push(cid);
-          stack.push(cid);
-        }
-      });
-    }
-  } else {
-    ids = [...compoundNodes];
-  }
-  ids.forEach(folderId => {
-    if (!expandedFolders.has(folderId)) return;
-    const folder = cy.getElementById(folderId);
-    if (!folder.length) return;
-    const children = folder.children().filter(n => n.visible());
-    const count = children.length;
-    if (count <= 1) return;
-    if (children.some(c => userPositions[c.id()])) return;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
-    let cx, cy_;
-    if (center && folderId === targetId) {
-      cx = center.x;
-      cy_ = center.y;
-    } else {
-      let sumX = 0, sumY = 0;
-      children.forEach(c => { sumX += c.position().x; sumY += c.position().y; });
-      cx = sumX / count;
-      cy_ = sumY / count;
-    }
-    children.forEach((child, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      child.position({
-        x: cx + (col - (cols - 1) / 2) * STEP_X,
-        y: cy_ + (row - (rows - 1) / 2) * STEP_Y,
-      });
-    });
-  });
 }
 
 // ── Node focus ───────────────────────────────────────────────────────────
@@ -967,36 +874,69 @@ cy.on('dblclick', 'node', evt => {
 
 let firstLoad = true;
 
-function runLayout(fit, newNodeIds = new Set()) {
-  // If many new nodes arrived, do a full re-layout so dagre can place everything properly
-  const fullRelayout = newNodeIds.size > 2 || firstLoad;
+// Independent spacing: dagre uses one sibling gap (NODE_SEP, kept tight for
+// scripts); FOLDER_GAP adds extra room around folder boxes afterward.
+const NODE_SEP = 18;
+const FOLDER_GAP = 70;
 
-  const frozenPositions = {};
-  if (!fullRelayout) {
-    cy.nodes().forEach(n => {
-      if (!newNodeIds.has(n.id())) frozenPositions[n.id()] = { ...n.position() };
+function shiftNodeY(n, dy) {
+  if (n.isParent()) {
+    n.descendants().filter(d => d.isChildless()).forEach(d => {
+      const p = d.position();
+      d.position({ x: p.x, y: p.y + dy });
     });
+  } else {
+    const p = n.position();
+    n.position({ x: p.x, y: p.y + dy });
   }
+}
 
+// After dagre, insert extra vertical gap before each folder within its sibling
+// group, shifting the rest of the group down — only adds space, never overlaps.
+function separateFolders() {
+  const isFolder = n => n.data('is_folder') || compoundNodes.has(n.id());
+  const groups = {};
+  cy.nodes(':visible').forEach(n => {
+    const key = n.parent().length ? n.parent().id() : '';
+    (groups[key] = groups[key] || []).push(n);
+  });
+  Object.values(groups).forEach(list => {
+    if (list.length < 2) return;
+    list.sort((a, b) => a.boundingBox().y1 - b.boundingBox().y1);
+    let delta = 0;
+    for (let i = 1; i < list.length; i++) {
+      if (delta) shiftNodeY(list[i], delta);
+      if (!isFolder(list[i]) && !isFolder(list[i - 1])) continue;
+      const gap = list[i].boundingBox().y1 - list[i - 1].boundingBox().y2;
+      if (gap < FOLDER_GAP) {
+        const extra = FOLDER_GAP - gap;
+        shiftNodeY(list[i], extra);
+        delta += extra;
+      }
+    }
+  });
+}
+
+function runLayout(fit) {
+  // Set visibility first so dagre sizes compounds correctly: a collapsed folder
+  // is laid out as a single box, an expanded one around its visible children.
+  applyCollapse();
   cy.layout({
     name: 'dagre',
     rankDir: 'LR',
-    nodeSep: 10,
-    rankSep: 50,
+    nodeSep: NODE_SEP,
+    rankSep: 55,
     edgeSep: 8,
     compound: true,
     animate: !firstLoad,
-    animationDuration: 400,
-    fit,
+    animationDuration: 350,
+    fit: false,
     padding: 48,
-    transform: (node, pos) => {
-      if (userPositions[node.id()])   return userPositions[node.id()];
-      if (frozenPositions[node.id()]) return frozenPositions[node.id()];
-      return pos;
-    }
+    // dagre places everything without overlap; only manually-dragged nodes are pinned.
+    transform: (node, pos) => userPositions[node.id()] || pos,
   }).run();
-  applyCollapse();
-  applyGridInsideFolders();
+  separateFolders();
+  if (fit) cy.fit(undefined, 48);
   applyFocus();
 }
 
@@ -1024,7 +964,6 @@ function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
       savedParents.delete(id);
       savedPositions.delete(id);
       expandedFolders.delete(id);
-      collapsePositions.delete(id);
       selectedNodes.delete(id);
       if (hoveredNode && hoveredNode.id() === id) {
         hoveredNode = null;
@@ -1105,7 +1044,7 @@ async function refresh() {
       // Restored layout: expand folders so saved child positions apply.
       const hasSaved = firstLoad && Object.keys(userPositions).length > 0;
       if (hasSaved) compoundNodes.forEach(id => expandedFolders.add(id));
-      runLayout(firstLoad, new Set(addedNodes));
+      runLayout(firstLoad);
       if (firstLoad) {
         updateFolderLabels();
         if (!hasSaved) cy.fit(undefined, 48);  // re-fit tightly after collapsing
@@ -1146,54 +1085,26 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 
 document.getElementById('btn-layout').addEventListener('click', () => {
   Object.keys(userPositions).forEach(k => delete userPositions[k]);
-  runLayout(true, new Set(cy.nodes().map(n => n.id())));
+  runLayout(false);  // relayout + folder separation, fit animated below so it's visible
+  cy.animate({ fit: { eles: cy.elements(), padding: 48 } }, { duration: 400 });
 });
 
 document.getElementById('btn-folders').addEventListener('click', () => {
   const anyExpanded = [...compoundNodes].some(id => expandedFolders.has(id));
   if (anyExpanded) {
-    compoundNodes.forEach(id => {
-      if (expandedFolders.has(id)) {
-        const node = cy.getElementById(id);
-        if (node.length) collapsePositions.set(id, { ...node.position() });
-        expandedFolders.delete(id);
-      }
-    });
+    expandedFolders.clear();
   } else {
-    compoundNodes.forEach(id => {
-      if (!expandedFolders.has(id)) {
-        const savedPos = collapsePositions.get(id);
-        const node = cy.getElementById(id);
-        if (node.length && savedPos) {
-          const cur = node.position();
-          const dx = cur.x - savedPos.x;
-          const dy = cur.y - savedPos.y;
-          if (dx !== 0 || dy !== 0) {
-            for (const childId of getDescendants(id)) {
-              if (userPositions[childId]) {
-                userPositions[childId].x += dx;
-                userPositions[childId].y += dy;
-              }
-              const sp = savedPositions.get(childId);
-              if (sp) { sp.x += dx; sp.y += dy; }
-            }
-          }
-          collapsePositions.delete(id);
-        }
-        delete userPositions[id];
-        expandedFolders.add(id);
-      }
-    });
+    compoundNodes.forEach(id => { delete userPositions[id]; expandedFolders.add(id); });
   }
   updateFolderLabels();
-  applyCollapse();
-  applyGridInsideFolders();
+  runLayout(false);
   cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
-  applyFocus();
   updateFolderButtonLabel();
 });
 
-document.getElementById('btn-fit').addEventListener('click', () => cy.fit(48));
+document.getElementById('btn-fit').addEventListener('click', () => {
+  cy.animate({ fit: { eles: cy.elements(), padding: 48 } }, { duration: 400 });
+});
 
 document.getElementById('btn-png').addEventListener('click', () => {
   const png = cy.png({ output: 'blob', bg: '#0a0a0d', scale: 2, full: true });
@@ -1299,7 +1210,7 @@ function applyDiff(diff) {
   });
 
   // Run layout to place ghost nodes
-  runLayout(true, new Set(diff.removed_nodes));
+  runLayout(true);
 
   const parts = [];
   if (diff.added_nodes.length) parts.push(`<span class="diff-badge diff-badge-add">+${diff.added_nodes.length}</span>`);
