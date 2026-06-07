@@ -95,7 +95,7 @@ async function refresh() {
       // a real position, then default to collapsed (unless a saved layout exists).
       const hasSaved = Object.keys(userPositions).length > 0;
       compoundNodes.forEach(id => expandedFolders.add(id));
-      runLayout();
+      runLayout(!hasSaved);
       if (!hasSaved) { expandedFolders.clear(); applyCollapse(); compactTopLevel(); applyCollapse(); }
       cy.fit(undefined, 48);
       updateFolderLabels();

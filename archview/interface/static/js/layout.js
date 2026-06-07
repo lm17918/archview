@@ -115,14 +115,16 @@ function leafCentroid(n) {
 
 const COLLAPSED_ROW = 64;  // height of a collapsed folder box (style: 40 + padding/border)
 
-// The expanded dagre spaces top-level folders for their (huge) expanded heights,
-// leaving them far apart once collapsed. Re-stack the top-level folders/nodes
+// The expanded dagre spaces top-level FOLDERS for their (huge) expanded heights,
+// leaving them far apart once collapsed. Re-stack only the top-level folders
 // tightly by their leaf centroid (reliable; a collapsed folder's own position()
-// is not), preserving x so the dependency columns stay. Moves whole subtrees.
+// is not). Loose top-level nodes keep their dagre spot — they have no expanded
+// height to compensate for, and a folder-less project must stay untouched.
 function compactTopLevel() {
-  const tops = cy.nodes().filter(n => !n.parent().length && !n.hidden());
-  if (tops.length >= 2) {
-    const items = tops.map(n => ({ n, c: leafCentroid(n) })).sort((a, b) => a.c.y - b.c.y);
+  const folders = cy.nodes().filter(n =>
+    !n.parent().length && !n.hidden() && compoundNodes.has(n.id()));
+  if (folders.length >= 2) {
+    const items = folders.map(n => ({ n, c: leafCentroid(n) })).sort((a, b) => a.c.y - b.c.y);
     let cursor = items[0].c.y;
     items.forEach(it => {
       shiftSubtree(it.n, 0, cursor - it.c.y);
@@ -139,8 +141,10 @@ function compactTopLevel() {
 
 // Dagre runs ONCE on first load (and on explicit "Reset layout"). Folders are
 // expanded for it so every child gets a real position; collapse only hides
-// afterwards. animate:false — nodes never fly between positions.
-function runLayout() {
+// afterwards. animate:false — nodes never fly between positions. When restoring
+// a saved layout, pass fresh=false: skip the grid/spacing passes so the user's
+// saved child positions survive (the transform still pins them).
+function runLayout(fresh = true) {
   applyCollapse();
   cy.layout({
     name: 'dagre',
@@ -160,8 +164,10 @@ function runLayout() {
       return userPositions[id] || pos;
     },
   }).run();
-  separateFolders();
-  gridFolderChildren();  // last word on intra-folder layout, so grids stay square
+  if (fresh) {
+    separateFolders();
+    gridFolderChildren();  // last word on intra-folder layout, so grids stay square
+  }
   applyFocus();
 }
 
