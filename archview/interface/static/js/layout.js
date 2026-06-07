@@ -1,47 +1,9 @@
 let firstLoad = true;
 
-// dagre keeps siblings tight (NODE_SEP); FOLDER_GAP adds breathing room around
-// folder boxes afterwards. Both apply only during runLayout (first load / reset).
+// dagre keeps siblings tight (NODE_SEP); FOLDER_GAP is the vertical gap between
+// stacked collapsed folder boxes (see compactTopLevel).
 const NODE_SEP = 18;
 const FOLDER_GAP = 70;
-
-function shiftNodeY(n, dy) {
-  if (n.isParent()) {
-    n.descendants().filter(d => d.isChildless()).forEach(d => {
-      const p = d.position();
-      d.position({ x: p.x, y: p.y + dy });
-    });
-  } else {
-    const p = n.position();
-    n.position({ x: p.x, y: p.y + dy });
-  }
-}
-
-// Within each sibling group, ensure FOLDER_GAP of space before/after a folder
-// box, shifting the rest of the group down. Only adds space — never overlaps.
-function separateFolders() {
-  const isFolder = n => n.data('is_folder') || compoundNodes.has(n.id());
-  const groups = {};
-  cy.nodes(':visible').forEach(n => {
-    const key = n.parent().length ? n.parent().id() : '';
-    (groups[key] = groups[key] || []).push(n);
-  });
-  Object.values(groups).forEach(list => {
-    if (list.length < 2) return;
-    list.sort((a, b) => a.boundingBox().y1 - b.boundingBox().y1);
-    let delta = 0;
-    for (let i = 1; i < list.length; i++) {
-      if (delta) shiftNodeY(list[i], delta);
-      if (!isFolder(list[i]) && !isFolder(list[i - 1])) continue;
-      const gap = list[i].boundingBox().y1 - list[i - 1].boundingBox().y2;
-      if (gap < FOLDER_GAP) {
-        const extra = FOLDER_GAP - gap;
-        shiftNodeY(list[i], extra);
-        delta += extra;
-      }
-    }
-  });
-}
 
 // Position freshly-added nodes near their folder siblings without touching any
 // existing node. New files appear next to their folder; nothing else moves.
@@ -167,10 +129,7 @@ function runLayout(fresh = true) {
       return userPositions[id] || pos;
     },
   }).run();
-  if (fresh) {
-    separateFolders();
-    gridFolderChildren();  // last word on intra-folder layout, so grids stay square
-  }
+  if (fresh) gridFolderChildren();
   applyFocus();
 }
 
