@@ -188,6 +188,40 @@ def test_no_edge_pointing_from_importer_to_dep(proj, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Sibling (implicit-relative / script-style) imports
+# ---------------------------------------------------------------------------
+
+
+def test_sibling_import_in_subpackage_resolves(tmp_path):
+    """`from sib import x` inside pkg/ resolves to pkg.sib (script-style)."""
+    proj = tmp_path / "src"
+    pkg = proj / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "main.py").write_text('"""Main."""\nfrom sib import thing\n')
+    (pkg / "sib.py").write_text('"""Sib."""\ndef thing():\n    pass\n')
+    _, edges = run(proj, tmp_path)
+    assert ("pkg.sib", "pkg.main") in edges
+
+
+def test_sibling_fallback_only_targets_same_directory(tmp_path):
+    """A bare import must not wrongly link to a same-named file elsewhere."""
+    proj = tmp_path / "src"
+    (proj / "a").mkdir(parents=True)
+    (proj / "b").mkdir(parents=True)
+    (proj / "a" / "main.py").write_text('"""A main."""\nfrom util import f\n')
+    (proj / "b" / "util.py").write_text('"""B util."""\ndef f():\n    pass\n')
+    _, edges = run(proj, tmp_path)
+    # a/main has no sibling util.py, so it must NOT link to b.util
+    assert ("b.util", "a.main") not in edges
+
+
+def test_absolute_import_unchanged_by_sibling_fallback(proj, tmp_path):
+    """Real absolute imports still resolve; fallback never overrides them."""
+    nodes, edges = run(proj, tmp_path)
+    assert ("utils.helper", "main") in edges or ("utils.math", "main") in edges
+
+
+# ---------------------------------------------------------------------------
 # Docstrings
 # ---------------------------------------------------------------------------
 

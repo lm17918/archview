@@ -16,6 +16,23 @@ def _find_target(imp: str, modules: dict) -> str | None:
     return None
 
 
+def _resolve_absolute(imp: str, mod: str, modules: dict) -> str | None:
+    """Resolve an absolute import name, falling back to an implicit sibling
+    import (script-style) when no top-level match exists.
+
+    `from evaluate import x` inside `pkg/main.py` resolves to `pkg.evaluate`
+    only when it isn't already a top-level module — Python finds it the same
+    way when `pkg/` is run as a script. The fallback never overrides a real
+    absolute match and only ever resolves to a sibling that actually exists,
+    so it cannot redirect an already-resolved import.
+    """
+    target = _find_target(imp, modules)
+    if target:
+        return target
+    sibling = _resolve_relative_import(mod, 1, imp, modules)
+    return _find_target(sibling, modules) if sibling else None
+
+
 def _resolve_relative_import(
     mod: str, level: int, sub: str | None, modules: dict
 ) -> str | None:
@@ -64,7 +81,7 @@ def _build_reexport_map(parsed, modules):
                     continue
                 pkg_target = _find_target(base, modules) if node.module else None
             elif node.module:
-                pkg_target = _find_target(node.module, modules)
+                pkg_target = _resolve_absolute(node.module, mod, modules)
                 base = node.module
             else:
                 continue
@@ -115,7 +132,7 @@ def _collect_imports(parsed, modules, module_symbols):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    target = _find_target(alias.name, modules)
+                    target = _resolve_absolute(alias.name, mod, modules)
                     if (
                         target
                         and target != mod
@@ -164,7 +181,7 @@ def _collect_imports(parsed, modules, module_symbols):
                                     alias.name
                                 ] = SYM_VAR
                 elif node.module:
-                    target = _find_target(node.module, modules)
+                    target = _resolve_absolute(node.module, mod, modules)
                     if target and target != mod:
                         target_syms = module_symbols.get(target, {})
                         for alias in node.names:
