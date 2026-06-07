@@ -121,8 +121,11 @@ const COLLAPSED_ROW = 64;  // height of a collapsed folder box (style: 40 + padd
 // is not). Loose top-level nodes keep their dagre spot — they have no expanded
 // height to compensate for, and a folder-less project must stay untouched.
 function compactTopLevel() {
+  // Only collapsed top-level folders: their boxes are a fixed COLLAPSED_ROW tall,
+  // so stacking by that step never overlaps. Expanded folders are already spaced
+  // by dagre for their real (grid) size, so leave them where they are.
   const folders = cy.nodes().filter(n =>
-    !n.parent().length && !n.hidden() && compoundNodes.has(n.id()));
+    !n.parent().length && !n.hidden() && compoundNodes.has(n.id()) && !expandedFolders.has(n.id()));
   if (folders.length >= 2) {
     const items = folders.map(n => ({ n, c: leafCentroid(n) })).sort((a, b) => a.c.y - b.c.y);
     let cursor = items[0].c.y;
