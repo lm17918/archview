@@ -1,0 +1,32 @@
+const REFRESH_MS = parseInt(new URLSearchParams(window.location.search).get('interval') || '10') * 1000;
+const statusEl = document.getElementById('status');
+const tooltip = document.getElementById('tooltip');
+
+const userPositions = {};
+
+async function loadSavedPositions() {
+  try {
+    const resp = await fetch('/positions.json?t=' + Date.now());
+    if (resp.ok) Object.assign(userPositions, await resp.json());
+  } catch(e) {}
+}
+
+const cy = cytoscape({
+  container: document.getElementById('cy'),
+  elements: [],
+  style: cyStyle,
+  layout: { name: 'preset' },
+  wheelSensitivity: 0.3,
+});
+
+cy.on('dragfree', 'node', evt => {
+  const node = evt.target;
+  const id = node.id();
+  // Dragging a folder box moves its children too (even hidden ones); persist
+  // their new positions so collapse/expand keeps everything in place.
+  node.descendants().forEach(d => { userPositions[d.id()] = { ...d.position() }; });
+  // An expanded compound's own position is derived from its children — don't pin it.
+  if (!(compoundNodes.has(id) && expandedFolders.has(id))) {
+    userPositions[id] = { ...node.position() };
+  }
+});

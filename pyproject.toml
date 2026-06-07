@@ -42,7 +42,7 @@ where = ["."]
 include = ["archview*"]
 
 [tool.setuptools.package-data]
-"archview.interface" = ["static/*.html", "static/*.js"]
+"archview.interface" = ["static/*.html", "static/*.js", "static/css/*.css", "static/js/*.js"]
 
 [tool.black]
 target-version = ["py39"]

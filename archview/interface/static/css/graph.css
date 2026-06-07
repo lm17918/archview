@@ -1,0 +1,181 @@
+  /* ── Graph area ── */
+  #graph-wrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+  #cy {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+  }
+
+  /* ── Tooltip ── */
+  #tooltip {
+    display: none;
+    position: fixed;
+    background: #18181f;
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 15px;
+    max-width: 380px;
+    border: 1px solid #35354a;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+    line-height: 1.6;
+  }
+  .tt-name {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 5px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #cdc5ff;
+  }
+  .tt-doc { color: #a0a0c0; font-style: italic; font-size: 14px; }
+  .tt-type {
+    margin-top: 7px;
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .tt-symbols {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2e2e42;
+    font-size: 14px;
+    line-height: 1.8;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Annotation toolbar ── */
+  #anno-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 50;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 5px;
+  }
+  .tool-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tool-btn:hover { background: var(--surface2); color: var(--text); }
+  .tool-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Annotation layer ── */
+  #anno-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    overflow: hidden;
+  }
+  #anno-layer.tool-active { pointer-events: all; cursor: crosshair; }
+  #anno-layer.tool-text   { cursor: text; }
+  #anno-viewport {
+    transform-origin: 0 0;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  .annotation { position: absolute; pointer-events: none; }
+  .anno-box {
+    border: 2px dashed;
+    border-radius: 8px;
+    background: rgba(139,124,248,0.05);
+  }
+  .anno-box-label {
+    position: absolute;
+    top: -11px;
+    left: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    padding: 0 6px;
+    background: var(--bg);
+    white-space: nowrap;
+  }
+  .anno-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    font-weight: 600;
+    white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+  }
+  .anno-preview { opacity: 0.5; }
+  .anno-input {
+    position: absolute;
+    pointer-events: all;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    outline: none;
+    min-width: 80px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .anno-input-text {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  #anno-viewport.eraser-active .annotation {
+    pointer-events: all;
+    cursor: pointer;
+  }
+  #anno-viewport.eraser-active .annotation:hover { opacity: 0.4; }
+
+  /* ── Diff mode ── */
+  #diff-controls {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  #diff-ref {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: pointer;
+    max-width: 180px;
+  }
+  #diff-ref:focus { border-color: var(--accent); outline: none; }
+  .diff-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+  }
+  .diff-badge-add { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .diff-badge-del { background: rgba(248,113,113,0.15); color: #f87171; }
+  .diff-badge-mod { background: rgba(250,204,21,0.15); color: #facc15; }
+
