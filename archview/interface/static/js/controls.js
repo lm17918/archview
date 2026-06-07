@@ -5,16 +5,18 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     if (compoundNodes.has(id) && expandedFolders.has(id)) return;  // derived, not pinned
     allPositions[id] = { ...n.position() };
   });
+  const payload = { positions: allPositions, expanded: [...expandedFolders] };
   try {
     const resp = await fetch('/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(allPositions),
+      body: JSON.stringify(payload),
     });
     if (resp.ok) {
       await resp.json();
       setStatus('Saved');
       Object.assign(userPositions, allPositions);
+      savedExpanded = [...expandedFolders];
     } else {
       setStatus('Save failed: ' + resp.status, false);
     }

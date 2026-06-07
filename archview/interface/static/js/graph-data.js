@@ -91,12 +91,25 @@ async function refresh() {
     if (!firstLoad && addedNodes.length > 0) highlightNewNodes(addedNodes);
 
     if (firstLoad) {
-      // The only automatic layout. Expand every folder so dagre gives each child
-      // a real position, then default to collapsed (unless a saved layout exists).
       const hasSaved = Object.keys(userPositions).length > 0;
-      compoundNodes.forEach(id => expandedFolders.add(id));
-      runLayout(!hasSaved);
-      if (!hasSaved) { expandedFolders.clear(); applyCollapse(); compactTopLevel(); applyCollapse(); }
+      if (hasSaved) {
+        // Restore the saved layout: saved positions (via the layout transform)
+        // and the saved open/closed state. Legacy files (no expanded list) keep
+        // the old behavior of opening every folder.
+        if (savedExpanded !== null) {
+          savedExpanded.forEach(id => { if (compoundNodes.has(id)) expandedFolders.add(id); });
+        } else {
+          compoundNodes.forEach(id => expandedFolders.add(id));
+        }
+        runLayout(false);   // pin saved positions, no grid/compact
+        applyCollapse();    // apply open/closed state + collapsed-box positions
+      } else {
+        // Fresh open: lay out expanded so every child gets a position, grid each
+        // folder square, then collapse to a compact default view.
+        compoundNodes.forEach(id => expandedFolders.add(id));
+        runLayout();
+        expandedFolders.clear(); applyCollapse(); compactTopLevel(); applyCollapse();
+      }
       cy.fit(undefined, 48);
       updateFolderLabels();
       updateFolderButtonLabel();

@@ -3,11 +3,19 @@ const statusEl = document.getElementById('status');
 const tooltip = document.getElementById('tooltip');
 
 const userPositions = {};
+let savedExpanded = null;  // folder ids that were expanded when saved (null = legacy file)
 
 async function loadSavedPositions() {
   try {
     const resp = await fetch('/positions.json?t=' + Date.now());
-    if (resp.ok) Object.assign(userPositions, await resp.json());
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data && data.positions) {            // new format: { positions, expanded }
+      Object.assign(userPositions, data.positions);
+      savedExpanded = Array.isArray(data.expanded) ? data.expanded : null;
+    } else {
+      Object.assign(userPositions, data);    // legacy: flat { id: {x,y} } map
+    }
   } catch(e) {}
 }
 
