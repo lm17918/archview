@@ -13,6 +13,7 @@ from archview.analysis import generate_graph
 from archview.analysis.python.stdlib_names import STDLIB_NAMES
 from archview.ignore import cmd_ignore, ensure_default_ignore_file
 from archview.interface import make_server
+from archview.watch import LiveBroker, tree_signature
 
 
 def _check_stdlib_shadowing(project_dir: Path) -> None:
@@ -33,7 +34,9 @@ def _check_stdlib_shadowing(project_dir: Path) -> None:
 PORT_SCAN_RANGE = 100
 
 
-def _bind_free_port(start, static_dir, data_dir, project_dir, interval, ignore_file):
+def _bind_free_port(
+    start, static_dir, data_dir, project_dir, interval, ignore_file, broker
+):
     """Bind the first free port from `start`, scanning up to PORT_SCAN_RANGE."""
     for port in range(start, start + PORT_SCAN_RANGE):
         try:
@@ -45,6 +48,7 @@ def _bind_free_port(start, static_dir, data_dir, project_dir, interval, ignore_f
                 project_dir,
                 interval,
                 ignore_file,
+                broker,
             )
         except OSError:
             continue
@@ -75,8 +79,9 @@ def _cmd_serve(args) -> None:
     print("Running initial analysis...")
     generate_graph(project_dir, ignore_file, graph_path)
 
+    broker = LiveBroker()
     server, port = _bind_free_port(
-        args.port, static_dir, data_dir, project_dir, args.interval, ignore_file
+        args.port, static_dir, data_dir, project_dir, args.interval, ignore_file, broker
     )
     if server is None:
         print(f"No free port in {args.port}-{args.port + PORT_SCAN_RANGE - 1}")
@@ -86,9 +91,15 @@ def _cmd_serve(args) -> None:
     stop_event = threading.Event()
 
     def watcher():
+        last_sig = tree_signature(project_dir, ignore_file)
         while not stop_event.wait(args.interval):
             try:
+                sig = tree_signature(project_dir, ignore_file)
+                if sig == last_sig:
+                    continue
+                last_sig = sig
                 generate_graph(project_dir, ignore_file, graph_path)
+                broker.bump()
             except Exception:
                 pass
 
@@ -145,11 +156,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.add_argument(
         "--interval",
-        type=int,
-        default=10,
-        choices=range(1, 3601),
+        type=float,
+        default=0.5,
         metavar="SEC",
-        help="Graph refresh interval in seconds (default: 10)",
+        help="Filesystem scan interval in seconds; lower = snappier (default: 0.5)",
     )
     return parser
 

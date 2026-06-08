@@ -33,8 +33,8 @@ archview /path/to/your/project
 Open http://localhost:8080 — that's it. If 8080 is taken, ArchView scans the next 100 ports and prints the one it picked.
 
 ```bash
-# Custom port and refresh interval
-archview /path/to/project --port 9000 --interval 5
+# Custom port and filesystem scan interval (lower = snappier, default 0.5s)
+archview /path/to/project --port 9000 --interval 0.2
 ```
 
 > **Tip:** point ArchView at your project's _import root_ — the directory your code imports relative to. An edge is only drawn when an import resolves to a file inside the scanned tree, so `from a import x` connects only if `a.py` sits at the root you scanned. Scan a parent folder and those absolute imports won't resolve (the modules show up, just without arrows).
@@ -53,7 +53,7 @@ archview /path/to/project --port 9000 --interval 5
 
 ### Live refresh
 
-Edit your code, save — the graph updates automatically. No restart needed.
+Edit your code, save — the graph updates near-instantly, pushed to the browser the moment a file changes (Server-Sent Events, no polling lag). No restart needed.
 
 ### Interactive exploration
 

@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 from archview.interface import annotations, diff
+from archview.watch import LiveBroker
 
 
 class ArchviewHandler(http.server.BaseHTTPRequestHandler):
@@ -15,7 +16,8 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
     data_dir: Path
     project_dir: Path
     ignore_file: Path | None = None
-    interval: int = 10
+    interval: float = 0.5
+    broker: LiveBroker | None = None
 
     MIME = {
         ".js": "application/javascript",
@@ -33,6 +35,8 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
             return
         elif path in ("/", "/live.html"):
             self._serve_file(self.static_dir / "live.html", "text/html; charset=utf-8")
+        elif path == "/events":
+            self._handle_events()
         elif path == "/graph.json":
             self._serve_file(self.data_dir / "graph.json", "application/json")
         elif path == "/positions.json":
@@ -116,6 +120,27 @@ class ArchviewHandler(http.server.BaseHTTPRequestHandler):
         self._json_response({"ok": True})
         print("  Saved positions")
 
+    def _handle_events(self):
+        """Server-Sent Events: push a line whenever the graph version bumps."""
+        if self.broker is None:
+            self._not_found()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        last = 0
+        try:
+            while True:
+                version = self.broker.wait(last, timeout=15)
+                if version != last:
+                    last = version
+                    self.wfile.write(f"data: {version}\n\n".encode())
+                else:
+                    self.wfile.write(b": ping\n\n")  # heartbeat detects dead client
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, ValueError):
+            return
+
     def _serve_file(self, path: Path, content_type: str):
         if not path.exists():
             self.send_response(404)
@@ -142,13 +167,15 @@ def make_server(
     static_dir: Path,
     data_dir: Path,
     project_dir: Path,
-    interval: int = 10,
+    interval: float = 0.5,
     ignore_file: Path | None = None,
+    broker: LiveBroker | None = None,
 ):
     ArchviewHandler.static_dir = Path(static_dir)
     ArchviewHandler.data_dir = Path(data_dir)
     ArchviewHandler.project_dir = Path(project_dir)
     ArchviewHandler.ignore_file = ignore_file
     ArchviewHandler.interval = interval
+    ArchviewHandler.broker = broker
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     return http.server.ThreadingHTTPServer((host, port), ArchviewHandler)

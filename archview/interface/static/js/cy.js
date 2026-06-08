@@ -1,4 +1,5 @@
-const REFRESH_MS = parseInt(new URLSearchParams(window.location.search).get('interval') || '10') * 1000;
+// SSE pushes updates instantly; this poll is only a fallback if the stream drops.
+const REFRESH_MS = 30000;
 const statusEl = document.getElementById('status');
 const tooltip = document.getElementById('tooltip');
 
