@@ -7,7 +7,12 @@
   #cy {
     position: absolute;
     inset: 0;
-    background: var(--bg);
+    background-color: var(--bg);
+    /* subtle dot grid + center glow; cytoscape canvases are transparent */
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(139,124,248,0.04), transparent),
+      radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1.5px);
+    background-size: 100% 100%, 26px 26px;
   }
 
   /* ── Tooltip ── */

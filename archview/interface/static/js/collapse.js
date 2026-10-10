@@ -15,6 +15,8 @@ function getCollapsedAncestor(nodeId) {
   return p.length ? p.id() : nodeId;
 }
 
+const KIND_RANK = { static: 0, lazy: 1, type: 2 };
+
 function updateProxyEdges() {
   cy.edges('[?is_proxy]').remove();
   const proxyLabels = {};
@@ -24,13 +26,21 @@ function updateProxyEdges() {
     if (src === tgt) return;
     if (src === edge.data('source') && tgt === edge.data('target')) return;
     const key = `${src}→${tgt}`;
-    if (!proxyLabels[key]) proxyLabels[key] = { src, tgt, lines: new Set() };
+    if (!proxyLabels[key]) proxyLabels[key] = { src, tgt, lines: new Set(), kind: 'type', cycle: false };
+    const info = proxyLabels[key];
     const label = edge.data('label');
-    if (label) label.split('\n').forEach(l => { if (l.trim()) proxyLabels[key].lines.add(l.trim()); });
+    if (label) label.split('\n').forEach(l => { if (l.trim()) info.lines.add(l.trim()); });
+    // Aggregate: strongest kind wins; any cycle member marks the proxy
+    const k = edge.data('kind') || 'static';
+    if (KIND_RANK[k] < KIND_RANK[info.kind]) info.kind = k;
+    if (edge.data('cycle')) info.cycle = true;
   });
   for (const [key, info] of Object.entries(proxyLabels)) {
     const label = [...info.lines].sort().join('\n');
-    cy.add({ data: { id: `__proxy__${key}`, source: info.src, target: info.tgt, is_proxy: true, label } });
+    cy.add({ data: {
+      id: `__proxy__${key}`, source: info.src, target: info.tgt,
+      is_proxy: true, label, kind: info.kind, cycle: info.cycle,
+    } });
   }
 }
 
@@ -83,10 +93,41 @@ function updateFolderLabels() {
   cy.nodes().filter(n => isCollapsible(n)).forEach(n => n.style());
 }
 
-// Toggle visibility only — no layout, no animation, no repositioning.
+// Toggle visibility with a short fade — no layout, no repositioning.
+const animatingFolders = new Set();
+
 function toggleFolder(id) {
-  if (expandedFolders.has(id)) expandedFolders.delete(id);
-  else expandedFolders.add(id);
+  if (animatingFolders.has(id)) return;
+  const folder = cy.getElementById(id);
+  if (expandedFolders.has(id)) {
+    // Collapse: fade the visible subtree (and its edges) out, then hide it
+    const kids = folder.descendants().filter(n => n.visible());
+    const eles = kids.union(kids.connectedEdges());
+    animatingFolders.add(id);
+    eles.addClass('fading');
+    setTimeout(() => {
+      eles.removeClass('fading');
+      expandedFolders.delete(id);
+      finishToggle();
+      animatingFolders.delete(id);
+    }, 160);
+  } else {
+    // Expand: show first, then fade the revealed children in
+    expandedFolders.add(id);
+    finishToggle();
+    const kids = folder.descendants().filter(n => n.visible());
+    if (kids.length) {
+      kids.style('opacity', 0);
+      kids.animate({ style: { opacity: 1 } }, {
+        duration: 180,
+        easing: 'ease-out',
+        complete: () => kids.removeStyle('opacity'),
+      });
+    }
+  }
+}
+
+function finishToggle() {
   applyCollapse();
   updateFolderLabels();
   cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));

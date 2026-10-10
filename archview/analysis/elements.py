@@ -18,9 +18,15 @@ def build_elements(
     module_symbols,
     module_rel,
     parse_errors=None,
+    edge_kinds=None,
+    cycle_nodes=None,
+    cycle_edges=None,
 ):
     """Assemble the Cytoscape elements list (nodes + edges)."""
     parse_errors = parse_errors or {}
+    edge_kinds = edge_kinds or {}
+    cycle_nodes = cycle_nodes or set()
+    cycle_edges = cycle_edges or set()
     elements = []
 
     # Folder (synthetic compound) nodes — emitted first so children can reference them
@@ -37,6 +43,7 @@ def build_elements(
                     "group": "",
                     "filepath": "",
                     "symbols": "",
+                    "in_cycle": folder in cycle_nodes,
                 }
             }
         )
@@ -70,6 +77,7 @@ def build_elements(
                     "filepath": module_rel.get(node, ""),
                     "parent": find_parent(node, all_containers),
                     "symbols": symbols,
+                    "in_cycle": node in cycle_nodes,
                 }
             }
         )
@@ -85,6 +93,8 @@ def build_elements(
                     "source": tgt,
                     "target": src,
                     "label": label,
+                    "kind": edge_kinds.get((src, tgt), "static"),
+                    "cycle": (src, tgt) in cycle_edges,
                 }
             }
         )

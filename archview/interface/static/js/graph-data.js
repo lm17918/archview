@@ -8,22 +8,46 @@ function indexElements(elements) {
   return { nodeIds, edgeIds, nodeMap, edgeMap };
 }
 
+// Fade stale elements out briefly before deleting them. Elements re-added
+// before the timer fires lose the .removing class and survive the cleanup.
+function fadeOutAndRemove(eles) {
+  if (eles.length === 0) return;
+  if (firstLoad) { eles.remove(); return; }
+  const goners = eles.union(eles.nodes().connectedEdges());
+  goners.addClass('removing');
+  setTimeout(() => goners.filter('.removing').remove(), 320);
+}
+
+// Fade newly-added (visible) elements in.
+function fadeInByIds(ids) {
+  let eles = cy.collection();
+  ids.forEach(id => { eles = eles.union(cy.getElementById(id)); });
+  const vis = eles.filter(el => el.visible());
+  if (vis.length === 0) return;
+  vis.style('opacity', 0);
+  vis.animate({ style: { opacity: 1 } }, {
+    duration: 350,
+    easing: 'ease-out',
+    complete: () => vis.removeStyle('opacity'),
+  });
+}
+
 function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
-  // Remove stale nodes and edges
-  cy.nodes().forEach(n => {
+  // Stale nodes and edges fade out, then get removed (proxies are transient —
+  // updateProxyEdges rebuilds them on every applyCollapse, so skip them here)
+  const staleNodes = cy.nodes().filter(n => !nodeIds.has(n.id()));
+  staleNodes.forEach(n => {
     const id = n.id();
-    if (!nodeIds.has(id)) {
-      delete userPositions[id];
-      expandedFolders.delete(id);
-      selectedNodes.delete(id);
-      if (hoveredNode && hoveredNode.id() === id) {
-        hoveredNode = null;
-        hideTooltip();
-      }
-      n.remove();
+    delete userPositions[id];
+    expandedFolders.delete(id);
+    selectedNodes.delete(id);
+    if (hoveredNode && hoveredNode.id() === id) {
+      hoveredNode = null;
+      hideTooltip();
     }
   });
-  cy.edges().forEach(e => { if (!edgeIds.has(e.id())) e.remove(); });
+  const staleEdges = cy.edges().filter(e => !e.data('is_proxy') && !edgeIds.has(e.id()));
+  fadeOutAndRemove(staleNodes.union(staleEdges));
 
   // Upsert nodes — parents first so children can reference them
   const sorted = Object.values(nodeMap).sort((a, b) =>
@@ -36,19 +60,27 @@ function reconcileGraph({ nodeIds, edgeIds, nodeMap, edgeMap }) {
       // Don't overwrite parent — managed by collapse logic via move()
       const { parent, ...rest } = el.data;
       existing.data(rest);
-      existing.removeClass('new-node');
+      existing.removeClass('new-node removing');
     } else {
       cy.add(el);
       addedNodes.push(el.data.id);
     }
   }
 
-  // Upsert edges
+  // Upsert edges — update data so labels/kind/cycle stay current
+  const addedEdges = [];
   for (const [id, el] of Object.entries(edgeMap)) {
-    if (cy.getElementById(id).length === 0) cy.add(el);
+    const existing = cy.getElementById(id);
+    if (existing.length === 0) {
+      cy.add(el);
+      addedEdges.push(id);
+    } else {
+      existing.data(el.data);
+      existing.removeClass('removing');
+    }
   }
 
-  return addedNodes;
+  return { addedNodes, addedEdges };
 }
 
 function trackCompoundNodes(elements) {
@@ -85,10 +117,8 @@ async function refresh() {
     }
 
     const index = indexElements(newElements);
-    const addedNodes = reconcileGraph(index);
+    const { addedNodes, addedEdges } = reconcileGraph(index);
     trackCompoundNodes(newElements);
-
-    if (!firstLoad && addedNodes.length > 0) highlightNewNodes(addedNodes);
 
     if (firstLoad) {
       const hasSaved = Object.keys(userPositions).length > 0;
@@ -117,11 +147,17 @@ async function refresh() {
     } else {
       // Live refresh: only place brand-new nodes; never move existing ones.
       applyCollapse();
-      if (addedNodes.length > 0) placeNewNodesNearSiblings(addedNodes);
+      if (addedNodes.length > 0) {
+        placeNewNodesNearSiblings(addedNodes);
+        highlightNewNodes(addedNodes);
+      }
+      if (addedNodes.length > 0 || addedEdges.length > 0) {
+        fadeInByIds(addedNodes.concat(addedEdges));
+      }
       applyFocus();
     }
 
-    const n = cy.nodes().length;
+    const n = cy.nodes().not('.removing').length;
     setStatus(`${n} module${n !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`);
   } catch(e) {
     console.error('refresh error:', e);

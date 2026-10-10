@@ -133,6 +133,20 @@ function runLayout(fresh = true) {
   applyFocus();
 }
 
+// After a synchronous re-layout, glide visible leaf nodes from their old
+// spots to the new ones (compound boxes follow their children).
+function animateToNewPositions(before) {
+  cy.nodes().forEach(n => {
+    if (!n.isChildless() || !n.visible()) return;
+    const old = before[n.id()];
+    if (!old) return;
+    const tgt = { ...n.position() };
+    if (Math.abs(old.x - tgt.x) < 1 && Math.abs(old.y - tgt.y) < 1) return;
+    n.position(old);
+    n.animate({ position: tgt }, { duration: 400, easing: 'ease-in-out' });
+  });
+}
+
 function setStatus(msg, ok = true) {
   statusEl.textContent = msg;
   statusEl.style.color = ok ? 'var(--green)' : 'var(--red)';

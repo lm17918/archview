@@ -30,6 +30,8 @@ const cyStyle = [
         'shape': 'roundrectangle',
         'border-width': 1,
         'border-color': 'rgba(255,255,255,0.12)',
+        'transition-property': 'background-color, border-color, opacity',
+        'transition-duration': '0.15s',
       }
     },
     ...typeColorStyles,
@@ -43,6 +45,40 @@ const cyStyle = [
         'curve-style': 'bezier',
         'arrow-scale': 0.85,
         'label': '',
+        'transition-property': 'line-color, width, opacity',
+        'transition-duration': '0.15s',
+      }
+    },
+    {
+      selector: 'edge[kind="lazy"]',
+      style: {
+        'line-style': 'dashed',
+        'line-dash-pattern': [7, 4],
+        'line-color': '#47475e',
+        'target-arrow-color': '#56566e',
+      }
+    },
+    {
+      selector: 'edge[kind="type"]',
+      style: {
+        'line-style': 'dotted',
+        'line-color': '#3c3c50',
+        'target-arrow-color': '#4a4a60',
+      }
+    },
+    {
+      selector: 'node[?in_cycle]',
+      style: {
+        'border-color': '#f59e0b',
+        'border-width': 2,
+      }
+    },
+    {
+      selector: 'edge[?cycle]',
+      style: {
+        'line-color': '#f59e0b',
+        'target-arrow-color': '#f59e0b',
+        'width': 2,
       }
     },
     {
@@ -56,6 +92,14 @@ const cyStyle = [
         'line-style': 'dashed',
         'line-dash-pattern': [6, 4],
         'arrow-scale': 0.85,
+      }
+    },
+    {
+      selector: 'edge[?is_proxy][?cycle]',
+      style: {
+        'line-color': '#f59e0b',
+        'target-arrow-color': '#f59e0b',
+        'width': 2,
       }
     },
     {
@@ -87,6 +131,23 @@ const cyStyle = [
         'border-color': '#4ade80',
         'border-width': 2.5,
         'border-style': 'dashed',
+      }
+    },
+    // Fade-out targets: .removing = element being deleted (graph-data.js),
+    // .fading = transient hide during folder collapse (collapse.js). The base
+    // opacity transition makes the class change animate.
+    {
+      selector: '.removing, .fading',
+      style: { 'opacity': 0 }
+    },
+    {
+      selector: 'node.hovered',
+      style: {
+        'border-color': '#8b7cf8',
+        'border-width': 2,
+        'overlay-color': '#8b7cf8',
+        'overlay-padding': 6,
+        'overlay-opacity': 0.08,
       }
     },
     {

@@ -77,6 +77,9 @@ def _cmd_serve(args) -> None:
 
     _check_stdlib_shadowing(project_dir)
     print("Running initial analysis...")
+    # Snapshot before generating: a file changing mid-analysis triggers a
+    # (harmless) re-analysis instead of being missed.
+    initial_sig = tree_signature(project_dir, ignore_file)
     generate_graph(project_dir, ignore_file, graph_path)
 
     broker = LiveBroker()
@@ -91,17 +94,21 @@ def _cmd_serve(args) -> None:
     stop_event = threading.Event()
 
     def watcher():
-        last_sig = tree_signature(project_dir, ignore_file)
+        last_sig = initial_sig
+        last_error = None
         while not stop_event.wait(args.interval):
             try:
                 sig = tree_signature(project_dir, ignore_file)
                 if sig == last_sig:
                     continue
-                last_sig = sig
                 generate_graph(project_dir, ignore_file, graph_path)
                 broker.bump()
-            except Exception:
-                pass
+                last_sig = sig
+                last_error = None
+            except Exception as e:
+                if str(e) != last_error:
+                    last_error = str(e)
+                    print(f"  Watch error: {e}")
 
     threading.Thread(target=watcher, daemon=True).start()
 

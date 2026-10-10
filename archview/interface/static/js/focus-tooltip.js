@@ -102,13 +102,18 @@ function moveTooltip(e) {
 
 cy.on('mouseover', 'node', evt => {
   if (evt.target.hasClass('faded')) return;
+  evt.target.addClass('hovered');
   if (isCollapsible(evt.target)) return;
   hoveredNode = evt.target;
   renderNodeTooltip(hoveredNode);
 });
 
 cy.on('mousemove', 'node', evt => moveTooltip(evt.originalEvent));
-cy.on('mouseout',  'node', () => { hoveredNode = null; hideTooltip(); });
+cy.on('mouseout',  'node', evt => {
+  evt.target.removeClass('hovered');
+  hoveredNode = null;
+  hideTooltip();
+});
 
 cy.on('mouseover', 'edge.highlighted', evt => {
   const d = evt.target.data();

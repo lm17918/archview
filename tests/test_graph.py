@@ -222,6 +222,116 @@ def test_absolute_import_unchanged_by_sibling_fallback(proj, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Namespace packages and submodule imports
+# ---------------------------------------------------------------------------
+
+
+def test_namespace_import_targets_folder_not_arbitrary_submodule(tmp_path):
+    """`import pkg` where pkg/ has no __init__.py links to the folder node."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "alpha.py").write_text("")
+    (tmp_path / "pkg" / "beta.py").write_text("")
+    (tmp_path / "main.py").write_text("import pkg\n")
+    nodes, edges = run(tmp_path, tmp_path)
+    assert ("pkg", "main") in edges
+    assert ("pkg.alpha", "main") not in edges
+    assert ("pkg.beta", "main") not in edges
+
+
+def test_from_package_import_submodule_links_to_submodule(proj, tmp_path):
+    """`from utils import helper` depends on utils.helper, not utils/__init__."""
+    (proj / "user.py").write_text("from utils import helper\n")
+    _, edges = run(proj, tmp_path)
+    assert ("utils.helper", "user") in edges
+    assert ("utils", "user") not in edges
+
+
+# ---------------------------------------------------------------------------
+# Import kinds (static / lazy / type-only) and dynamic imports
+# ---------------------------------------------------------------------------
+
+
+def run_edges(project_dir, tmp_path):
+    data_dir = tmp_path / ".archview"
+    data_dir.mkdir(exist_ok=True)
+    graph_path = data_dir / "graph.json"
+    generate_graph(project_dir, None, graph_path)
+    elements = json.loads(graph_path.read_text())
+    return {
+        (e["data"]["source"], e["data"]["target"]): e["data"]
+        for e in elements
+        if "source" in e["data"]
+    }
+
+
+def test_lazy_import_kind(proj, tmp_path):
+    (proj / "main.py").write_text(
+        "def go():\n    from utils import helper\n    return helper\n"
+    )
+    edges = run_edges(proj, tmp_path)
+    assert edges[("utils.helper", "main")]["kind"] == "lazy"
+
+
+def test_type_checking_import_kind(proj, tmp_path):
+    (proj / "main.py").write_text(
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n    from utils import helper\n"
+    )
+    edges = run_edges(proj, tmp_path)
+    assert edges[("utils.helper", "main")]["kind"] == "type"
+
+
+def test_static_import_wins_over_lazy(proj, tmp_path):
+    (proj / "main.py").write_text(
+        "from utils import helper\n"
+        "def go():\n    from utils import helper\n    return helper\n"
+    )
+    edges = run_edges(proj, tmp_path)
+    assert edges[("utils.helper", "main")]["kind"] == "static"
+
+
+def test_dynamic_import_detected(proj, tmp_path):
+    (proj / "main.py").write_text(
+        "import importlib\n"
+        'def load():\n    return importlib.import_module("utils.helper")\n'
+    )
+    _, edges = run(proj, tmp_path)
+    assert ("utils.helper", "main") in edges
+
+
+# ---------------------------------------------------------------------------
+# Import cycles
+# ---------------------------------------------------------------------------
+
+
+def test_cycle_detected(tmp_path):
+    (tmp_path / "a.py").write_text("import b\n")
+    (tmp_path / "b.py").write_text("import a\n")
+    (tmp_path / "c.py").write_text("import a\n")
+    nodes, _ = run(tmp_path, tmp_path)
+    assert nodes["a"]["in_cycle"] is True
+    assert nodes["b"]["in_cycle"] is True
+    assert nodes["c"]["in_cycle"] is False
+
+
+def test_cycle_edges_marked(tmp_path):
+    (tmp_path / "a.py").write_text("import b\n")
+    (tmp_path / "b.py").write_text("import a\n")
+    edges = run_edges(tmp_path, tmp_path)
+    assert edges[("a", "b")]["cycle"] is True
+    assert edges[("b", "a")]["cycle"] is True
+
+
+def test_lazy_import_breaks_cycle(tmp_path):
+    """A cycle broken by an in-function import is not flagged."""
+    (tmp_path / "a.py").write_text("import b\n")
+    (tmp_path / "b.py").write_text("def go():\n    import a\n")
+    nodes, _ = run(tmp_path, tmp_path)
+    assert nodes["a"]["in_cycle"] is False
+    assert nodes["b"]["in_cycle"] is False
+
+
+# ---------------------------------------------------------------------------
 # Docstrings
 # ---------------------------------------------------------------------------
 

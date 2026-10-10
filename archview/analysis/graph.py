@@ -10,8 +10,9 @@ from archview.analysis.collect import (
     _collect_files_by_ext,
     collect_py_files,
 )
+from archview.analysis.cycles import find_cycles
 from archview.analysis.elements import build_elements
-from archview.analysis.python.edges import _collect_imports
+from archview.analysis.python.edges import KIND_STATIC, _collect_imports
 from archview.analysis.python.parse import _parse_modules, _parse_shell_scripts
 from archview.analysis.python.refs import _collect_file_refs, _resolve_shell_refs
 
@@ -50,11 +51,18 @@ def generate_graph_json(project_dir: Path, ignore_file: Path | None) -> list[dic
     module_symbols = {**py_syms, **sh_syms}
 
     # Edges: Python imports + file refs in Python strings + shell references
-    edge_names = _collect_imports(parsed, py_modules, module_symbols)
+    edge_names, edge_kinds = _collect_imports(parsed, py_modules, module_symbols)
     for key, syms in _collect_file_refs(parsed, module_rel).items():
         edge_names.setdefault(key, {}).update(syms)
     for key, syms in _resolve_shell_refs(shell_refs, module_rel).items():
         edge_names.setdefault(key, {}).update(syms)
+
+    # Cycles only count static imports — lazy/type-only imports are deferred
+    # at import time, which is exactly how cycles get broken on purpose.
+    static_edges = [
+        k for k in edge_names if edge_kinds.get(k, KIND_STATIC) == KIND_STATIC
+    ]
+    cycle_nodes, cycle_edges = find_cycles(static_edges)
 
     all_nodes = sorted(modules.keys())
     all_nodes_set = set(all_nodes)
@@ -87,6 +95,9 @@ def generate_graph_json(project_dir: Path, ignore_file: Path | None) -> list[dic
         module_symbols,
         module_rel,
         parse_errors,
+        edge_kinds,
+        cycle_nodes,
+        cycle_edges,
     )
 
 

@@ -26,6 +26,10 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 // Reset layout: the only place (besides first load) that re-runs dagre. Lay out
 // expanded so children get positions, then restore the current collapse state.
 document.getElementById('btn-layout').addEventListener('click', () => {
+  const before = {};
+  cy.nodes().forEach(n => {
+    if (n.isChildless() && n.visible()) before[n.id()] = { ...n.position() };
+  });
   Object.keys(userPositions).forEach(k => delete userPositions[k]);
   const wasExpanded = new Set(expandedFolders);
   compoundNodes.forEach(id => expandedFolders.add(id));
@@ -37,19 +41,35 @@ document.getElementById('btn-layout').addEventListener('click', () => {
   applyCollapse();
   updateFolderLabels();
   updateFolderButtonLabel();
+  animateToNewPositions(before);
   cy.animate({ fit: { eles: cy.elements(':visible'), padding: 48 } }, { duration: 400 });
 });
 
-// Collapse/expand all — visibility only, no layout, nothing moves.
+// Collapse/expand all — visibility only with a short fade; nothing moves.
 document.getElementById('btn-folders').addEventListener('click', () => {
   const anyExpanded = [...compoundNodes].some(id => expandedFolders.has(id));
-  if (anyExpanded) expandedFolders.clear();
-  else compoundNodes.forEach(id => expandedFolders.add(id));
-  applyCollapse();
-  updateFolderLabels();
-  cy.nodes(':hidden').forEach(n => selectedNodes.delete(n.id()));
-  applyFocus();
-  updateFolderButtonLabel();
+  if (anyExpanded) {
+    const kids = cy.nodes(':visible').filter(n => n.parent().length > 0);
+    const eles = kids.union(kids.connectedEdges());
+    eles.addClass('fading');
+    setTimeout(() => {
+      eles.removeClass('fading');
+      expandedFolders.clear();
+      finishToggle();
+    }, 160);
+  } else {
+    compoundNodes.forEach(id => expandedFolders.add(id));
+    finishToggle();
+    const kids = cy.nodes(':visible').filter(n => n.parent().length > 0);
+    if (kids.length) {
+      kids.style('opacity', 0);
+      kids.animate({ style: { opacity: 1 } }, {
+        duration: 180,
+        easing: 'ease-out',
+        complete: () => kids.removeStyle('opacity'),
+      });
+    }
+  }
 });
 
 document.getElementById('btn-fit').addEventListener('click', () => {
